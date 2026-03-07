@@ -12,6 +12,7 @@
 
 require("dotenv").config();
 
+const readline = require("readline");
 const { getShippingRates } = require("./src/rates");
 const { purchaseLabel } = require("./src/labels");
 const { getTrackingStatus } = require("./src/tracking");
@@ -64,6 +65,16 @@ function ok(label, value) {
   console.log(`  ✓ ${label}:`, typeof value === "object" ? JSON.stringify(value, null, 4).replace(/^/gm, "    ").trim() : value);
 }
 
+function prompt(question) {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Steps
 // ---------------------------------------------------------------------------
@@ -74,17 +85,30 @@ async function step1_getRates() {
   const { shipmentId, rates } = await getShippingRates(FROM_ADDRESS, TO_ADDRESS, PARCEL);
 
   ok("Shipment ID", shipmentId);
-  ok(`Rates returned (${rates.length})`, "");
+  console.log(`\n  Available shipping rates (${rates.length}):\n`);
+
+  // Sort cheapest first so the table is easy to scan
+  rates.sort((a, b) => parseFloat(a.amountUSD) - parseFloat(b.amountUSD));
 
   rates.forEach((r, i) => {
-    console.log(`    [${i}] ${r.carrier} · ${r.service} · $${r.amountUSD} · ${r.days ?? "?"} days · id=${r.rateId}`);
+    const days = r.days != null ? `${r.days} day${r.days === 1 ? "" : "s"}` : "? days";
+    console.log(`    [${i}]  ${String(r.carrier).padEnd(10)} ${String(r.service).padEnd(35)} $${String(r.amountUSD).padStart(6)}  ${days}`);
   });
 
-  // Return the cheapest rate for the next step
-  const cheapest = rates.sort((a, b) => parseFloat(a.amountUSD) - parseFloat(b.amountUSD))[0];
-  console.log(`\n  → Selected cheapest: ${cheapest.carrier} ${cheapest.service} ($${cheapest.amountUSD})`);
+  // Interactive selection
+  let selected;
+  while (selected === undefined) {
+    const answer = await prompt(`\n  Enter rate number [0-${rates.length - 1}]: `);
+    const idx = parseInt(answer, 10);
+    if (!isNaN(idx) && idx >= 0 && idx < rates.length) {
+      selected = rates[idx];
+    } else {
+      console.log(`  Invalid choice. Please enter a number between 0 and ${rates.length - 1}.`);
+    }
+  }
 
-  return cheapest.rateId;
+  console.log(`\n  → Selected: ${selected.carrier} · ${selected.service} · $${selected.amountUSD}`);
+  return selected.rateId;
 }
 
 async function step2_purchaseLabel(rateId) {
