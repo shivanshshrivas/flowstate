@@ -40,7 +40,7 @@ async function handleShippoWebhook(payload) {
   const trackingNumber = data?.tracking_number;
   const carrier = data?.carrier;
   const status = data?.tracking_status?.status ?? "UNKNOWN";
-  const substatus = data?.tracking_status?.substatus ?? null;
+  const substatus = data?.tracking_status?.substatus?.code ?? null;
   const statusDetails = data?.tracking_status?.status_details ?? "";
 
   if (!trackingNumber || !carrier) {
