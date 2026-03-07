@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import {
   Package, TrendingUp, DollarSign, Clock, AlertTriangle,
-  Download, CheckCircle, ExternalLink, PlusCircle, BotMessageSquare
+  Download, CheckCircle, ExternalLink, PlusCircle
 } from "lucide-react";
 import { MOCK_ORDERS, MOCK_SELLER_METRICS, MOCK_PAYOUT_RECORDS, MOCK_PRODUCTS } from "@/lib/mock-data";
 import { formatUsd, formatDate, formatDateTime } from "@/lib/utils";
@@ -18,7 +18,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { useOrderStore } from "@/stores/order-store";
 import { OrderState } from "@/lib/flowstate/types";
-import AgentChat from "@/components/chat/AgentChat";
 
 const SELLER_ID = "seller-001";
 
@@ -59,10 +58,6 @@ function SellerDashboardContent() {
           <TabsTrigger value="products">Products</TabsTrigger>
           <TabsTrigger value="payouts">Payouts</TabsTrigger>
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
-          <TabsTrigger value="ai" className="flex items-center gap-1.5">
-            <BotMessageSquare className="h-3.5 w-3.5" />
-            AI Assistant
-          </TabsTrigger>
         </TabsList>
 
         {/* Orders Tab */}
@@ -251,40 +246,6 @@ function SellerDashboardContent() {
                 </CardContent>
               </Card>
             ))}
-          </div>
-        </TabsContent>
-
-        {/* AI Assistant Tab */}
-        <TabsContent value="ai">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <AgentChat
-                agentType="seller"
-                context={{ sellerId: SELLER_ID }}
-                agentName="Seller AI Assistant"
-                placeholder="Ask about your orders, payouts, or disputes..."
-                suggestions={[
-                  "Show my pending orders",
-                  "What are my metrics?",
-                  "How much have I been paid?",
-                  "Confirm label for order-008",
-                ]}
-              />
-            </div>
-            <div className="lg:col-span-1 space-y-4">
-              <Card>
-                <CardContent className="p-4 text-sm text-neutral-400 space-y-2">
-                  <p className="font-medium text-neutral-300">What can I ask?</p>
-                  <ul className="space-y-1.5 list-disc list-inside text-xs">
-                    <li>View and filter your orders by status</li>
-                    <li>Check payout history & pending amounts</li>
-                    <li>Confirm label printed to unlock 15% payout</li>
-                    <li>Respond to buyer disputes</li>
-                    <li>View your performance metrics</li>
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </TabsContent>
       </Tabs>
