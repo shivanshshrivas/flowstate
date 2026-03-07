@@ -1,14 +1,12 @@
-import type { FastifyInstance } from "fastify";
+﻿import type { FastifyInstance } from "fastify";
 import fastifyWebsocket from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { db } from "../db/client";
-import { apiKeys } from "../db/schema";
+import type { ApiKey } from "../db/types";
 import { hashApiKey } from "../utils/crypto";
-import { eq, and } from "drizzle-orm";
 import type { WsIncoming, WsOutgoing } from "./types";
 
-// ─── Connection registry ────────────────────────────────────────────────────
-
+// Connection registry
 const projectSockets = new Map<string, Set<WebSocket>>();
 
 /**
@@ -38,8 +36,6 @@ export function getProjectConnectionCount(projectId: string): number {
   return projectSockets.get(projectId)?.size ?? 0;
 }
 
-// ─── Auth timeout ───────────────────────────────────────────────────────────
-
 const AUTH_TIMEOUT_MS = 5_000;
 
 async function authenticateSocket(token: string): Promise<string | null> {
@@ -49,25 +45,20 @@ async function authenticateSocket(token: string): Promise<string | null> {
   const keyHash = hashApiKey(token);
 
   try {
-    const [apiKey] = await db
-      .select()
-      .from(apiKeys)
-      .where(
-        and(
-          eq(apiKeys.keyPrefix, keyPrefix),
-          eq(apiKeys.keyHash, keyHash),
-          eq(apiKeys.isActive, true),
-        ),
-      )
-      .limit(1);
+    const rows = await db<ApiKey[]>`
+      select *
+      from api_keys
+      where key_prefix = ${keyPrefix}
+        and key_hash = ${keyHash}
+        and is_active = true
+      limit 1
+    `;
 
-    return apiKey?.projectId ?? null;
+    return rows[0]?.projectId ?? null;
   } catch {
     return null;
   }
 }
-
-// ─── Fastify plugin ─────────────────────────────────────────────────────────
 
 export async function registerWebSocket(app: FastifyInstance): Promise<void> {
   await app.register(fastifyWebsocket);
@@ -76,7 +67,6 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
     let authenticated = false;
     let projectId: string | null = null;
 
-    // Auth timeout: if client doesn't authenticate within 5s, close the connection
     const authTimer = setTimeout(() => {
       if (!authenticated) {
         const msg: WsOutgoing = {
@@ -102,13 +92,11 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
         return;
       }
 
-      // Handle ping/pong keepalive
       if (parsed.type === "ping") {
         socket.send(JSON.stringify({ type: "pong" } satisfies WsOutgoing));
         return;
       }
 
-      // Handle auth
       if (parsed.type === "auth") {
         if (authenticated) {
           socket.send(
@@ -133,7 +121,6 @@ export async function registerWebSocket(app: FastifyInstance): Promise<void> {
         authenticated = true;
         clearTimeout(authTimer);
 
-        // Register the socket for this project
         if (!projectSockets.has(projectId)) {
           projectSockets.set(projectId, new Set());
         }

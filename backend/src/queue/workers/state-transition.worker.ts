@@ -1,10 +1,8 @@
-import { Worker, type Job, type ConnectionOptions } from "bullmq";
+﻿import { Worker, type Job, type ConnectionOptions } from "bullmq";
 import { db } from "../../db/client";
-import { orders } from "../../db/schema";
-import { eq } from "drizzle-orm";
+import type { Order } from "../../db/types";
 import { OrderState, GRACE_PERIOD_HOURS } from "../../config/constants";
 import { flowStateEmitter } from "../../events/emitter";
-import { bpsOfToken } from "../../utils/currency";
 import type { IPinataBridge } from "../../bridges/pinata.bridge";
 import type { IBlockchainBridge } from "../../bridges/blockchain.bridge";
 import type { PayoutService } from "../../services/payout.service";
@@ -41,19 +39,20 @@ function createProcessor(deps: StateTransitionDeps) {
       trackingNumber,
     } = job.data;
 
-    // Idempotency: re-read order state before acting
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${orderId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       console.log(`[state-transition] Order ${orderId} not found, skipping`);
       return;
     }
 
-    // Skip if already at or past the target state
     if (order.state === targetState) {
       console.log(
         `[state-transition] Order ${orderId} already in state ${targetState}, skipping`,
@@ -83,21 +82,33 @@ function createProcessor(deps: StateTransitionDeps) {
     );
 
     const now = new Date();
-    const updateData: Record<string, any> = {
-      state: targetState,
-      updatedAt: now,
-    };
 
     if (targetState === OrderState.SHIPPED) {
-      updateData.shippedAt = now;
+      await db`
+        update orders
+        set
+          state = ${targetState},
+          shipped_at = ${now},
+          updated_at = ${now}
+        where id = ${orderId}
+      `;
     } else if (targetState === OrderState.DELIVERED) {
-      updateData.deliveredAt = now;
-      updateData.graceEndsAt = new Date(
-        now.getTime() + GRACE_PERIOD_HOURS * 60 * 60 * 1000,
-      );
+      await db`
+        update orders
+        set
+          state = ${targetState},
+          delivered_at = ${now},
+          grace_ends_at = ${new Date(now.getTime() + GRACE_PERIOD_HOURS * 60 * 60 * 1000)},
+          updated_at = ${now}
+        where id = ${orderId}
+      `;
+    } else {
+      await db`
+        update orders
+        set state = ${targetState}, updated_at = ${now}
+        where id = ${orderId}
+      `;
     }
-
-    await db.update(orders).set(updateData).where(eq(orders.id, orderId));
 
     await deps.payoutService.recordPayout({
       orderId,
@@ -118,9 +129,7 @@ function createProcessor(deps: StateTransitionDeps) {
       timestamp: now,
     });
 
-    console.log(
-      `[state-transition] Order ${orderId} advanced to ${targetState}`,
-    );
+    console.log(`[state-transition] Order ${orderId} advanced to ${targetState}`);
   };
 }
 

@@ -1,11 +1,9 @@
-import { db } from "../db/client";
-import { payouts, sellers } from "../db/schema";
+﻿import { db } from "../db/client";
+import type { Payout } from "../db/types";
 import { generateId } from "../utils/id-generator";
 import { bpsOfToken } from "../utils/currency";
 import { flowStateEmitter } from "../events/emitter";
-import { eq, desc } from "drizzle-orm";
 import type { PaginatedResult } from "../types/common";
-import type { Payout } from "../db/schema";
 
 export interface RecordPayoutInput {
   orderId: string;
@@ -22,20 +20,32 @@ export class PayoutService {
   async recordPayout(input: RecordPayoutInput): Promise<Payout> {
     const amountToken = bpsOfToken(input.escrowAmountToken, input.percentageBps);
 
-    const [payout] = await db
-      .insert(payouts)
-      .values({
-        id: generateId.payout(),
-        orderId: input.orderId,
-        sellerId: input.sellerId,
-        state: input.state,
-        amountToken,
-        percentageBps: input.percentageBps,
-        txHash: input.txHash,
-        platformFeeToken: input.platformFeeToken,
-        receiptIpfsCid: input.receiptIpfsCid,
-      })
-      .returning();
+    const rows = await db<Payout[]>`
+      insert into payouts (
+        id,
+        order_id,
+        seller_id,
+        state,
+        amount_token,
+        percentage_bps,
+        tx_hash,
+        platform_fee_token,
+        receipt_ipfs_cid
+      ) values (
+        ${generateId.payout()},
+        ${input.orderId},
+        ${input.sellerId},
+        ${input.state},
+        ${amountToken},
+        ${input.percentageBps},
+        ${input.txHash ?? null},
+        ${input.platformFeeToken ?? null},
+        ${input.receiptIpfsCid ?? null}
+      )
+      returning *
+    `;
+
+    const payout = rows[0];
 
     flowStateEmitter.emit("payout:recorded", {
       payoutId: payout.id,
@@ -52,22 +62,27 @@ export class PayoutService {
   async getSellerPayouts(
     sellerId: string,
     page = 1,
-    limit = 20
+    limit = 20,
   ): Promise<PaginatedResult<Payout>> {
     const offset = (page - 1) * limit;
 
-    const [data, countResult] = await Promise.all([
-      db
-        .select()
-        .from(payouts)
-        .where(eq(payouts.sellerId, sellerId))
-        .orderBy(desc(payouts.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db.select().from(payouts).where(eq(payouts.sellerId, sellerId)),
+    const [data, countRows] = await Promise.all([
+      db<Payout[]>`
+        select *
+        from payouts
+        where seller_id = ${sellerId}
+        order by created_at desc
+        limit ${limit}
+        offset ${offset}
+      `,
+      db<{ count: string }[]>`
+        select count(*)::text as count
+        from payouts
+        where seller_id = ${sellerId}
+      `,
     ]);
 
-    const total = countResult.length;
+    const total = parseInt(countRows[0]?.count ?? "0", 10);
 
     return {
       data,

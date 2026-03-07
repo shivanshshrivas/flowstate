@@ -1,42 +1,36 @@
-import { Queue, Worker, type Job, type ConnectionOptions } from "bullmq";
+﻿import { Queue, Worker, type Job, type ConnectionOptions } from "bullmq";
 import { db } from "../db/client";
-import { orders, disputes } from "../db/schema";
-import { eq, and, lt, isNull } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import type { Order, Dispute } from "../db/types";
 import type { IBlockchainBridge } from "../bridges/blockchain.bridge";
 import type { OrderService } from "../services/order.service";
-
-// ─── Cron job definitions ───────────────────────────────────────────────────
 
 export interface CronDeps {
   orderService: OrderService;
   blockchainBridge: IBlockchainBridge;
 }
 
-/**
- * Auto-finalize: Finds DELIVERED orders whose grace period has expired
- * and that have no open disputes, then finalizes them.
- */
 async function runAutoFinalize(deps: CronDeps): Promise<void> {
   const now = new Date();
 
-  // Find orders eligible for auto-finalization
-  const eligibleOrders = await db
-    .select({ id: orders.id, projectId: orders.projectId })
-    .from(orders)
-    .where(and(eq(orders.state, "DELIVERED"), lt(orders.graceEndsAt, now)));
+  const eligibleOrders = await db<Pick<Order, "id" | "projectId">[]>`
+    select id, project_id
+    from orders
+    where state = ${"DELIVERED"}
+      and grace_ends_at < ${now}
+  `;
 
   for (const order of eligibleOrders) {
-    // Check for open disputes on this order
-    const [openDispute] = await db
-      .select({ id: disputes.id })
-      .from(disputes)
-      .where(and(eq(disputes.orderId, order.id), eq(disputes.status, "OPEN")))
-      .limit(1);
+    const openDisputes = await db<Pick<Dispute, "id">[]>`
+      select id
+      from disputes
+      where order_id = ${order.id}
+        and status = ${"OPEN"}
+      limit 1
+    `;
 
-    if (openDispute) {
+    if (openDisputes[0]) {
       console.log(
-        `[cron:auto-finalize] Skipping order ${order.id} — open dispute exists`,
+        `[cron:auto-finalize] Skipping order ${order.id} - open dispute exists`,
       );
       continue;
     }
@@ -54,27 +48,26 @@ async function runAutoFinalize(deps: CronDeps): Promise<void> {
   console.log(`[cron:auto-finalize] Processed ${eligibleOrders.length} orders`);
 }
 
-/**
- * Dispute auto-resolve: Finds OPEN disputes where the seller deadline has passed,
- * and auto-resolves them in favor of the buyer (refund).
- */
 async function runDisputeAutoResolve(deps: CronDeps): Promise<void> {
   const now = new Date();
 
-  const expiredDisputes = await db
-    .select()
-    .from(disputes)
-    .where(and(eq(disputes.status, "OPEN"), lt(disputes.sellerDeadline, now)));
+  const expiredDisputes = await db<Dispute[]>`
+    select *
+    from disputes
+    where status = ${"OPEN"}
+      and seller_deadline < ${now}
+  `;
 
   for (const dispute of expiredDisputes) {
     try {
-      // Look up the order to get contractOrderId
-      const [order] = await db
-        .select()
-        .from(orders)
-        .where(eq(orders.id, dispute.orderId))
-        .limit(1);
+      const orderRows = await db<Order[]>`
+        select *
+        from orders
+        where id = ${dispute.orderId}
+        limit 1
+      `;
 
+      const order = orderRows[0];
       if (!order?.escrowContractOrderId) {
         console.error(
           `[cron:dispute-auto-resolve] No contract order ID for dispute ${dispute.id}`,
@@ -84,19 +77,17 @@ async function runDisputeAutoResolve(deps: CronDeps): Promise<void> {
 
       await deps.blockchainBridge.refundBuyer(order.escrowContractOrderId);
 
-      await db
-        .update(disputes)
-        .set({
-          status: "AUTO_RESOLVED",
-          resolutionType: "refund",
-          resolvedAt: now,
-          updatedAt: now,
-        })
-        .where(eq(disputes.id, dispute.id));
+      await db`
+        update disputes
+        set
+          status = ${"AUTO_RESOLVED"},
+          resolution_type = ${"refund"},
+          resolved_at = ${now},
+          updated_at = ${now}
+        where id = ${dispute.id}
+      `;
 
-      console.log(
-        `[cron:dispute-auto-resolve] Auto-resolved dispute ${dispute.id}`,
-      );
+      console.log(`[cron:dispute-auto-resolve] Auto-resolved dispute ${dispute.id}`);
     } catch (err: any) {
       console.error(
         `[cron:dispute-auto-resolve] Failed to auto-resolve dispute ${dispute.id}: ${err.message}`,
@@ -108,8 +99,6 @@ async function runDisputeAutoResolve(deps: CronDeps): Promise<void> {
     `[cron:dispute-auto-resolve] Processed ${expiredDisputes.length} disputes`,
   );
 }
-
-// ─── BullMQ cron worker ─────────────────────────────────────────────────────
 
 function createCronProcessor(deps: CronDeps) {
   return async function processCronJob(job: Job): Promise<void> {
@@ -126,9 +115,6 @@ function createCronProcessor(deps: CronDeps) {
   };
 }
 
-/**
- * Start cron jobs using BullMQ repeatable jobs (when Redis is available).
- */
 export function startCronJobs(
   connection: ConnectionOptions,
   deps: CronDeps,
@@ -138,7 +124,6 @@ export function startCronJobs(
     connection,
   });
 
-  // Auto-finalize: every 15 minutes
   cronQueue.add(
     "auto-finalize",
     {},
@@ -149,7 +134,6 @@ export function startCronJobs(
     },
   );
 
-  // Dispute auto-resolve: every 30 minutes
   cronQueue.add(
     "dispute-auto-resolve",
     {},
@@ -175,26 +159,18 @@ export function startCronJobs(
   return { cronQueue, cronWorker };
 }
 
-// ─── setInterval fallback (no Redis) ────────────────────────────────────────
-
 export function startCronFallback(deps: CronDeps): { stop: () => void } {
-  const autoFinalizeInterval = setInterval(
-    () => {
-      runAutoFinalize(deps).catch((err) => {
-        console.error("[cron-fallback:auto-finalize] Error:", err);
-      });
-    },
-    15 * 60 * 1000,
-  );
+  const autoFinalizeInterval = setInterval(() => {
+    runAutoFinalize(deps).catch((err) => {
+      console.error("[cron-fallback:auto-finalize] Error:", err);
+    });
+  }, 15 * 60 * 1000);
 
-  const disputeAutoResolveInterval = setInterval(
-    () => {
-      runDisputeAutoResolve(deps).catch((err) => {
-        console.error("[cron-fallback:dispute-auto-resolve] Error:", err);
-      });
-    },
-    30 * 60 * 1000,
-  );
+  const disputeAutoResolveInterval = setInterval(() => {
+    runDisputeAutoResolve(deps).catch((err) => {
+      console.error("[cron-fallback:dispute-auto-resolve] Error:", err);
+    });
+  }, 30 * 60 * 1000);
 
   console.log("[cron-fallback] Using setInterval fallback (no Redis)");
 

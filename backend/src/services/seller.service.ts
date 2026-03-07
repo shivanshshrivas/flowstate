@@ -1,17 +1,15 @@
-import { db } from "../db/client";
-import { sellers, orders, payouts, disputes } from "../db/schema";
+﻿import { db } from "../db/client";
+import type { Seller, Order, Payout, Dispute } from "../db/types";
 import { generateId } from "../utils/id-generator";
-import { eq, and, desc, count, avg } from "drizzle-orm";
 import { PAYOUT_DEFAULTS } from "../config/constants";
 import type { OnboardSellerInput, SellerMetrics } from "../types/sellers";
 import type { PaginatedResult } from "../types/common";
-import type { Seller, Order, Payout } from "../db/schema";
+import { toDate } from "../db/utils";
 
 const VALID_PAYOUT_TOTAL_BPS = 10000;
 
 export class SellerService {
   async onboard(projectId: string, input: OnboardSellerInput): Promise<Seller> {
-    // Validate payout config if provided
     if (input.payoutConfig) {
       const total =
         input.payoutConfig.labelCreatedBps +
@@ -21,7 +19,7 @@ export class SellerService {
 
       if (total !== VALID_PAYOUT_TOTAL_BPS) {
         const err: any = new Error(
-          `Payout config must sum to ${VALID_PAYOUT_TOTAL_BPS} bps (got ${total})`
+          `Payout config must sum to ${VALID_PAYOUT_TOTAL_BPS} bps (got ${total})`,
         );
         err.statusCode = 400;
         throw err;
@@ -35,22 +33,32 @@ export class SellerService {
       finalizedBps: PAYOUT_DEFAULTS.FINALIZED_BPS,
     };
 
-    const [seller] = await db
-      .insert(sellers)
-      .values({
-        id: generateId.seller(),
-        projectId,
-        walletAddress: input.walletAddress,
-        businessName: input.businessName,
-        businessAddress: input.businessAddress as any,
-        carrierAccounts: (input.carrierAccounts ?? {}) as any,
-        payoutConfig: (input.payoutConfig ?? defaultPayoutConfig) as any,
-        reputationScore: 100,
-        isActive: true,
-      })
-      .returning();
+    const rows = await db<Seller[]>`
+      insert into sellers (
+        id,
+        project_id,
+        wallet_address,
+        business_name,
+        business_address,
+        carrier_accounts,
+        payout_config,
+        reputation_score,
+        is_active
+      ) values (
+        ${generateId.seller()},
+        ${projectId},
+        ${input.walletAddress},
+        ${input.businessName},
+        ${db.json(input.businessAddress as any)},
+        ${db.json((input.carrierAccounts ?? {}) as any)},
+        ${db.json((input.payoutConfig ?? defaultPayoutConfig) as any)},
+        100,
+        true
+      )
+      returning *
+    `;
 
-    return seller;
+    return rows[0];
   }
 
   async getOrders(
@@ -58,16 +66,17 @@ export class SellerService {
     projectId: string,
     status?: string,
     page = 1,
-    limit = 20
+    limit = 20,
   ): Promise<PaginatedResult<Order>> {
-    // Verify seller belongs to project
-    const [seller] = await db
-      .select()
-      .from(sellers)
-      .where(and(eq(sellers.id, sellerId), eq(sellers.projectId, projectId)))
-      .limit(1);
+    const sellerRows = await db<Seller[]>`
+      select *
+      from sellers
+      where id = ${sellerId}
+        and project_id = ${projectId}
+      limit 1
+    `;
 
-    if (!seller) {
+    if (!sellerRows[0]) {
       const err: any = new Error("Seller not found");
       err.statusCode = 404;
       throw err;
@@ -75,40 +84,64 @@ export class SellerService {
 
     const offset = (page - 1) * limit;
 
-    const whereClause = status
-      ? and(eq(orders.sellerId, sellerId), eq(orders.state, status as any))
-      : eq(orders.sellerId, sellerId);
-
-    const [data, allRows] = await Promise.all([
-      db
-        .select()
-        .from(orders)
-        .where(whereClause)
-        .orderBy(desc(orders.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db.select({ id: orders.id }).from(orders).where(whereClause),
+    const [data, countRows] = await Promise.all([
+      status
+        ? db<Order[]>`
+            select *
+            from orders
+            where seller_id = ${sellerId}
+              and state = ${status}
+            order by created_at desc
+            limit ${limit}
+            offset ${offset}
+          `
+        : db<Order[]>`
+            select *
+            from orders
+            where seller_id = ${sellerId}
+            order by created_at desc
+            limit ${limit}
+            offset ${offset}
+          `,
+      status
+        ? db<{ count: string }[]>`
+            select count(*)::text as count
+            from orders
+            where seller_id = ${sellerId}
+              and state = ${status}
+          `
+        : db<{ count: string }[]>`
+            select count(*)::text as count
+            from orders
+            where seller_id = ${sellerId}
+          `,
     ]);
+
+    const total = parseInt(countRows[0]?.count ?? "0", 10);
 
     return {
       data,
-      total: allRows.length,
+      total,
       page,
       limit,
-      totalPages: Math.ceil(allRows.length / limit),
+      totalPages: Math.ceil(total / limit),
     };
   }
 
   async getMetrics(
     sellerId: string,
     projectId: string,
-    _periodDays = 30
+    _periodDays = 30,
   ): Promise<SellerMetrics> {
-    const [seller] = await db
-      .select()
-      .from(sellers)
-      .where(and(eq(sellers.id, sellerId), eq(sellers.projectId, projectId)))
-      .limit(1);
+    const sellerRows = await db<Seller[]>`
+      select *
+      from sellers
+      where id = ${sellerId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const seller = sellerRows[0];
 
     if (!seller) {
       const err: any = new Error("Seller not found");
@@ -117,9 +150,13 @@ export class SellerService {
     }
 
     const [sellerOrders, sellerDisputes, sellerPayouts] = await Promise.all([
-      db.select().from(orders).where(eq(orders.sellerId, sellerId)),
-      db.select().from(disputes).where(eq(disputes.sellerWallet, seller.walletAddress)),
-      db.select().from(payouts).where(eq(payouts.sellerId, sellerId)),
+      db<Order[]>`select * from orders where seller_id = ${sellerId}`,
+      db<Dispute[]>`
+        select *
+        from disputes
+        where seller_wallet = ${seller.walletAddress}
+      `,
+      db<Payout[]>`select * from payouts where seller_id = ${sellerId}`,
     ]);
 
     const totalOrders = sellerOrders.length;
@@ -128,14 +165,16 @@ export class SellerService {
       .toFixed(18);
     const disputeRate = totalOrders > 0 ? sellerDisputes.length / totalOrders : 0;
 
-    // Average fulfillment time: LABEL_CREATED → DELIVERED
     const fulfilledOrders = sellerOrders.filter(
-      (o) => o.labelCreatedAt && o.deliveredAt
+      (o) => toDate(o.labelCreatedAt) && toDate(o.deliveredAt),
     );
+
     const avgFulfillmentTimeDays =
       fulfilledOrders.length > 0
         ? fulfilledOrders.reduce((sum, o) => {
-            const ms = o.deliveredAt!.getTime() - o.labelCreatedAt!.getTime();
+            const deliveredAt = toDate(o.deliveredAt)!;
+            const labelCreatedAt = toDate(o.labelCreatedAt)!;
+            const ms = deliveredAt.getTime() - labelCreatedAt.getTime();
             return sum + ms / (1000 * 60 * 60 * 24);
           }, 0) / fulfilledOrders.length
         : null;
@@ -153,39 +192,48 @@ export class SellerService {
     sellerId: string,
     projectId: string,
     page = 1,
-    limit = 20
+    limit = 20,
   ): Promise<PaginatedResult<Payout>> {
-    // Verify ownership
-    const [seller] = await db
-      .select()
-      .from(sellers)
-      .where(and(eq(sellers.id, sellerId), eq(sellers.projectId, projectId)))
-      .limit(1);
+    const sellerRows = await db<Seller[]>`
+      select *
+      from sellers
+      where id = ${sellerId}
+        and project_id = ${projectId}
+      limit 1
+    `;
 
-    if (!seller) {
+    if (!sellerRows[0]) {
       const err: any = new Error("Seller not found");
       err.statusCode = 404;
       throw err;
     }
 
     const offset = (page - 1) * limit;
-    const [data, allRows] = await Promise.all([
-      db
-        .select()
-        .from(payouts)
-        .where(eq(payouts.sellerId, sellerId))
-        .orderBy(desc(payouts.createdAt))
-        .limit(limit)
-        .offset(offset),
-      db.select({ id: payouts.id }).from(payouts).where(eq(payouts.sellerId, sellerId)),
+
+    const [data, countRows] = await Promise.all([
+      db<Payout[]>`
+        select *
+        from payouts
+        where seller_id = ${sellerId}
+        order by created_at desc
+        limit ${limit}
+        offset ${offset}
+      `,
+      db<{ count: string }[]>`
+        select count(*)::text as count
+        from payouts
+        where seller_id = ${sellerId}
+      `,
     ]);
+
+    const total = parseInt(countRows[0]?.count ?? "0", 10);
 
     return {
       data,
-      total: allRows.length,
+      total,
       page,
       limit,
-      totalPages: Math.ceil(allRows.length / limit),
+      totalPages: Math.ceil(total / limit),
     };
   }
 }

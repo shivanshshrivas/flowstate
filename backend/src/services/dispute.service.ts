@@ -1,33 +1,43 @@
-import { db } from "../db/client";
-import { orders, disputes } from "../db/schema";
+﻿import { db } from "../db/client";
+import type { Order, Dispute } from "../db/types";
+import { toDate } from "../db/utils";
 import { generateId } from "../utils/id-generator";
-import { eq, and } from "drizzle-orm";
-import { SELLER_DISPUTE_DEADLINE_HOURS, REVIEW_DEADLINE_DAYS } from "../config/constants";
+import {
+  SELLER_DISPUTE_DEADLINE_HOURS,
+  REVIEW_DEADLINE_DAYS,
+} from "../config/constants";
 import { flowStateEmitter } from "../events/emitter";
 import type { IPinataBridge } from "../bridges/pinata.bridge";
 import type { IBlockchainBridge } from "../bridges/blockchain.bridge";
-import type { CreateDisputeInput, RespondDisputeInput, ResolveDisputeInput } from "../types/disputes";
-import type { Dispute } from "../db/schema";
+import type {
+  CreateDisputeInput,
+  RespondDisputeInput,
+  ResolveDisputeInput,
+} from "../types/disputes";
 
 export class DisputeService {
   constructor(
     private pinataBridge: IPinataBridge,
-    private blockchainBridge: IBlockchainBridge
+    private blockchainBridge: IBlockchainBridge,
   ) {}
 
   async create(
     projectId: string,
-    input: CreateDisputeInput
+    input: CreateDisputeInput,
   ): Promise<{
     disputeId: string;
     frozenAmountToken: string;
     sellerDeadline: Date;
   }> {
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, input.orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${input.orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Order not found");
@@ -37,63 +47,74 @@ export class DisputeService {
 
     if (order.state !== "DELIVERED") {
       const err: any = new Error(
-        `Disputes can only be opened on DELIVERED orders. Current state: ${order.state}`
+        `Disputes can only be opened on DELIVERED orders. Current state: ${order.state}`,
       );
       err.statusCode = 409;
       throw err;
     }
 
-    // Must be within grace period
-    if (order.graceEndsAt && order.graceEndsAt < new Date()) {
+    const graceEndsAt = toDate(order.graceEndsAt);
+    if (graceEndsAt && graceEndsAt < new Date()) {
       const err: any = new Error("Grace period has expired; dispute window is closed");
       err.statusCode = 409;
       throw err;
     }
 
-    // Pin evidence to IPFS
     let buyerEvidenceCid: string | undefined;
     if (input.evidenceUrls.length > 0) {
       buyerEvidenceCid = await this.pinataBridge.pinFile(
         input.evidenceUrls[0],
-        `evidence_buyer_${input.orderId}`
+        `evidence_buyer_${input.orderId}`,
       );
     }
 
     const frozenAmountToken = order.escrowAmountToken ?? "0";
     const contractOrderId = order.escrowContractOrderId!;
 
-    // Initiate dispute on-chain
-    const { txHash, disputeId: contractDisputeId } = await this.blockchainBridge.initiateDispute(
+    const { disputeId: contractDisputeId } = await this.blockchainBridge.initiateDispute(
       contractOrderId,
-      buyerEvidenceCid ?? ""
+      buyerEvidenceCid ?? "",
     );
 
     const now = new Date();
     const sellerDeadline = new Date(
-      now.getTime() + SELLER_DISPUTE_DEADLINE_HOURS * 60 * 60 * 1000
+      now.getTime() + SELLER_DISPUTE_DEADLINE_HOURS * 60 * 60 * 1000,
     );
 
-    const [dispute] = await db
-      .insert(disputes)
-      .values({
-        id: generateId.dispute(),
-        orderId: input.orderId,
-        buyerWallet: order.buyerWallet,
-        sellerWallet: order.sellerWallet,
-        status: "OPEN",
-        reason: input.reason,
-        buyerEvidenceCid,
-        frozenAmountToken,
-        contractDisputeId,
-        sellerDeadline,
-      })
-      .returning();
+    const disputeRows = await db<Dispute[]>`
+      insert into disputes (
+        id,
+        order_id,
+        buyer_wallet,
+        seller_wallet,
+        status,
+        reason,
+        buyer_evidence_cid,
+        frozen_amount_token,
+        contract_dispute_id,
+        seller_deadline
+      ) values (
+        ${generateId.dispute()},
+        ${input.orderId},
+        ${order.buyerWallet},
+        ${order.sellerWallet},
+        ${"OPEN"},
+        ${input.reason},
+        ${buyerEvidenceCid ?? null},
+        ${frozenAmountToken},
+        ${contractDisputeId},
+        ${sellerDeadline}
+      )
+      returning *
+    `;
 
-    // Update order to DISPUTED
-    await db
-      .update(orders)
-      .set({ state: "DISPUTED", updatedAt: now })
-      .where(eq(orders.id, input.orderId));
+    const dispute = disputeRows[0];
+
+    await db`
+      update orders
+      set state = ${"DISPUTED"}, updated_at = now()
+      where id = ${input.orderId}
+    `;
 
     flowStateEmitter.emit("dispute:created", {
       disputeId: dispute.id,
@@ -113,13 +134,16 @@ export class DisputeService {
   async respond(
     disputeId: string,
     projectId: string,
-    input: RespondDisputeInput
+    input: RespondDisputeInput,
   ): Promise<{ status: string; txHash: string; reviewDeadline?: Date }> {
-    const [dispute] = await db
-      .select()
-      .from(disputes)
-      .where(eq(disputes.id, disputeId))
-      .limit(1);
+    const disputeRows = await db<Dispute[]>`
+      select *
+      from disputes
+      where id = ${disputeId}
+      limit 1
+    `;
+
+    const dispute = disputeRows[0];
 
     if (!dispute) {
       const err: any = new Error("Dispute not found");
@@ -127,12 +151,15 @@ export class DisputeService {
       throw err;
     }
 
-    // Verify dispute belongs to this project via order
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, dispute.orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${dispute.orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Dispute not accessible for this project");
@@ -147,55 +174,53 @@ export class DisputeService {
     }
 
     if (input.action === "accept") {
-      // Seller accepts → refund buyer
       const { txHash } = await this.blockchainBridge.resolveDispute(
         dispute.contractDisputeId!,
-        "refund"
+        "refund",
       );
       await this.blockchainBridge.refundBuyer(order.escrowContractOrderId!);
 
-      await db
-        .update(disputes)
-        .set({
-          status: "RESOLVED_BUYER",
-          resolutionType: "refund",
-          resolutionTxHash: txHash,
-          resolvedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(disputes.id, disputeId));
+      await db`
+        update disputes
+        set
+          status = ${"RESOLVED_BUYER"},
+          resolution_type = ${"refund"},
+          resolution_tx_hash = ${txHash},
+          resolved_at = now(),
+          updated_at = now()
+        where id = ${disputeId}
+      `;
 
       return { status: "RESOLVED_BUYER", txHash };
     }
 
-    // Seller contests
     let sellerEvidenceCid: string | undefined;
     if (input.evidenceUrls && input.evidenceUrls.length > 0) {
       sellerEvidenceCid = await this.pinataBridge.pinFile(
         input.evidenceUrls[0],
-        `evidence_seller_${disputeId}`
+        `evidence_seller_${disputeId}`,
       );
     }
 
     const { txHash } = await this.blockchainBridge.respondToDispute(
       dispute.contractDisputeId!,
       false,
-      sellerEvidenceCid
+      sellerEvidenceCid,
     );
 
     const reviewDeadline = new Date(
-      Date.now() + REVIEW_DEADLINE_DAYS * 24 * 60 * 60 * 1000
+      Date.now() + REVIEW_DEADLINE_DAYS * 24 * 60 * 60 * 1000,
     );
 
-    await db
-      .update(disputes)
-      .set({
-        status: "SELLER_RESPONDED",
-        sellerEvidenceCid,
-        reviewDeadline,
-        updatedAt: new Date(),
-      })
-      .where(eq(disputes.id, disputeId));
+    await db`
+      update disputes
+      set
+        status = ${"SELLER_RESPONDED"},
+        seller_evidence_cid = ${sellerEvidenceCid ?? null},
+        review_deadline = ${reviewDeadline},
+        updated_at = now()
+      where id = ${disputeId}
+    `;
 
     return { status: "SELLER_RESPONDED", txHash, reviewDeadline };
   }
@@ -203,13 +228,16 @@ export class DisputeService {
   async resolve(
     disputeId: string,
     projectId: string,
-    input: ResolveDisputeInput
+    input: ResolveDisputeInput,
   ): Promise<{ status: string; txHash: string }> {
-    const [dispute] = await db
-      .select()
-      .from(disputes)
-      .where(eq(disputes.id, disputeId))
-      .limit(1);
+    const disputeRows = await db<Dispute[]>`
+      select *
+      from disputes
+      where id = ${disputeId}
+      limit 1
+    `;
+
+    const dispute = disputeRows[0];
 
     if (!dispute) {
       const err: any = new Error("Dispute not found");
@@ -217,11 +245,15 @@ export class DisputeService {
       throw err;
     }
 
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, dispute.orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${dispute.orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Dispute not accessible for this project");
@@ -232,7 +264,7 @@ export class DisputeService {
     const { txHash } = await this.blockchainBridge.resolveDispute(
       dispute.contractDisputeId!,
       input.resolution,
-      input.splitBps
+      input.splitBps,
     );
 
     const statusMap = {
@@ -243,17 +275,17 @@ export class DisputeService {
 
     const newStatus = statusMap[input.resolution];
 
-    await db
-      .update(disputes)
-      .set({
-        status: newStatus,
-        resolutionType: input.resolution,
-        resolutionSplitBps: input.splitBps,
-        resolutionTxHash: txHash,
-        resolvedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(disputes.id, disputeId));
+    await db`
+      update disputes
+      set
+        status = ${newStatus},
+        resolution_type = ${input.resolution},
+        resolution_split_bps = ${input.splitBps ?? null},
+        resolution_tx_hash = ${txHash},
+        resolved_at = now(),
+        updated_at = now()
+      where id = ${disputeId}
+    `;
 
     flowStateEmitter.emit("dispute:resolved", {
       disputeId,

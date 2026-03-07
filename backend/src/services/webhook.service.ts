@@ -1,8 +1,7 @@
-import { db } from "../db/client";
-import { webhookRegistrations, webhookLogs } from "../db/schema";
+﻿import { db } from "../db/client";
+import type { WebhookRegistration } from "../db/types";
 import { generateId } from "../utils/id-generator";
 import { signWebhook } from "../utils/crypto";
-import { eq, and } from "drizzle-orm";
 import { getWebhookDeliveryQueue, queuesAvailable } from "../queue/queues";
 import { WEBHOOK_DELIVERY_JOB_OPTS } from "../queue/workers/webhook-delivery.worker";
 
@@ -40,46 +39,48 @@ export class WebhookService {
       responseBody = err?.message ?? "Network error";
     }
 
-    // Log the attempt (fire-and-forget)
-    db.insert(webhookLogs)
-      .values({
-        id: generateId.webhookLog(),
-        registrationId: reg.id,
-        projectId,
-        eventType,
-        payload: payload as Record<string, unknown>,
-        statusCode,
-        responseBody,
-        deliveredAt:
-          statusCode && statusCode >= 200 && statusCode < 300
-            ? new Date()
-            : undefined,
-      })
-      .catch(() => {
-        /* ignore log failures */
-      });
+    db`
+      insert into webhook_logs (
+        id,
+        registration_id,
+        project_id,
+        event_type,
+        payload,
+        status_code,
+        response_body,
+        delivered_at
+      ) values (
+        ${generateId.webhookLog()},
+        ${reg.id},
+        ${projectId},
+        ${eventType},
+        ${db.json(payload as any)},
+        ${statusCode ?? null},
+        ${responseBody ?? null},
+        ${statusCode && statusCode >= 200 && statusCode < 300 ? new Date() : null}
+      )
+    `.catch(() => {
+      /* ignore log failures */
+    });
 
     return { statusCode, responseBody };
   }
 
   /**
    * Dispatch an event to all active webhook registrations for a project.
-   * Runs synchronously (in-process) — used as fallback when Redis is unavailable.
+   * Runs synchronously (in-process) - used as fallback when Redis is unavailable.
    */
   async dispatch(
     projectId: string,
     eventType: string,
     payload: unknown,
   ): Promise<void> {
-    const registrations = await db
-      .select()
-      .from(webhookRegistrations)
-      .where(
-        and(
-          eq(webhookRegistrations.projectId, projectId),
-          eq(webhookRegistrations.isActive, true),
-        ),
-      );
+    const registrations = await db<WebhookRegistration[]>`
+      select *
+      from webhook_registrations
+      where project_id = ${projectId}
+        and is_active = true
+    `;
 
     const body = JSON.stringify({
       event: eventType,
@@ -88,22 +89,12 @@ export class WebhookService {
     });
 
     for (const reg of registrations) {
-      const events = reg.events as string[];
-      if (
-        events.length > 0 &&
-        !events.includes(eventType) &&
-        !events.includes("*")
-      ) {
+      const events = Array.isArray(reg.events) ? reg.events : [];
+      if (events.length > 0 && !events.includes(eventType) && !events.includes("*")) {
         continue;
       }
 
-      await this.deliverToRegistration(
-        reg,
-        projectId,
-        eventType,
-        payload,
-        body,
-      );
+      await this.deliverToRegistration(reg, projectId, eventType, payload, body);
     }
   }
 
@@ -125,15 +116,12 @@ export class WebhookService {
       return this.dispatch(projectId, eventType, payload);
     }
 
-    const registrations = await db
-      .select()
-      .from(webhookRegistrations)
-      .where(
-        and(
-          eq(webhookRegistrations.projectId, projectId),
-          eq(webhookRegistrations.isActive, true),
-        ),
-      );
+    const registrations = await db<WebhookRegistration[]>`
+      select *
+      from webhook_registrations
+      where project_id = ${projectId}
+        and is_active = true
+    `;
 
     const body = JSON.stringify({
       event: eventType,
@@ -142,12 +130,8 @@ export class WebhookService {
     });
 
     for (const reg of registrations) {
-      const events = reg.events as string[];
-      if (
-        events.length > 0 &&
-        !events.includes(eventType) &&
-        !events.includes("*")
-      ) {
+      const events = Array.isArray(reg.events) ? reg.events : [];
+      if (events.length > 0 && !events.includes(eventType) && !events.includes("*")) {
         continue;
       }
 

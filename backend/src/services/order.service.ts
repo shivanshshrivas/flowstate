@@ -1,10 +1,10 @@
-import { db } from "../db/client";
-import { orders, orderItems, sellers } from "../db/schema";
+﻿import { db } from "../db/client";
+import type { Order, OrderItem, Seller } from "../db/types";
+import { toDate } from "../db/utils";
 import { generateId } from "../utils/id-generator";
 import { convertOrderTotal, bpsOfToken } from "../utils/currency";
 import { flowStateEmitter } from "../events/emitter";
-import { OrderState, PAYOUT_DEFAULTS, GRACE_PERIOD_HOURS } from "../config/constants";
-import { eq, and } from "drizzle-orm";
+import { OrderState, PAYOUT_DEFAULTS } from "../config/constants";
 import type { IShippoBridge } from "../bridges/shippo.bridge";
 import type { IPinataBridge } from "../bridges/pinata.bridge";
 import type { IBlockchainBridge } from "../bridges/blockchain.bridge";
@@ -16,7 +16,6 @@ import type {
   ShippingRate,
   PayoutSchedule,
 } from "../types/orders";
-import type { Order, OrderItem } from "../db/schema";
 import { PayoutService } from "./payout.service";
 
 export class OrderService {
@@ -24,12 +23,12 @@ export class OrderService {
     private shippoBridge: IShippoBridge,
     private pinataBridge: IPinataBridge,
     private blockchainBridge: IBlockchainBridge,
-    private payoutService: PayoutService
+    private payoutService: PayoutService,
   ) {}
 
   async create(
     projectId: string,
-    input: CreateOrderInput
+    input: CreateOrderInput,
   ): Promise<{
     orderId: string;
     shippingOptions: ShippingRate[];
@@ -37,12 +36,16 @@ export class OrderService {
     subtotalUsd: number;
     totalUsd: number;
   }> {
-    // Validate seller exists and belongs to project
-    const [seller] = await db
-      .select()
-      .from(sellers)
-      .where(and(eq(sellers.id, input.sellerId), eq(sellers.projectId, projectId), eq(sellers.isActive, true)))
-      .limit(1);
+    const sellerRows = await db<Seller[]>`
+      select *
+      from sellers
+      where id = ${input.sellerId}
+        and project_id = ${projectId}
+        and is_active = true
+      limit 1
+    `;
+
+    const seller = sellerRows[0];
 
     if (!seller) {
       const err: any = new Error("Seller not found");
@@ -50,54 +53,75 @@ export class OrderService {
       throw err;
     }
 
-    // Calculate subtotal from items
     const subtotalUsd = input.items.reduce(
       (sum, item) => sum + item.unitPriceUsd * item.quantity,
-      0
+      0,
     );
 
-    // Get shipping rates from Shippo
     const { shipmentId, rates } = await this.shippoBridge.getRates(
       input.addressFrom,
       input.addressTo,
-      input.parcel
+      input.parcel,
     );
 
     const orderId = generateId.order();
 
-    // Insert order
-    await db.insert(orders).values({
-      id: orderId,
-      projectId,
-      sellerId: input.sellerId,
-      buyerWallet: input.buyerWallet,
-      sellerWallet: input.sellerWallet,
-      state: "INITIATED",
-      shippoShipmentId: shipmentId,
-      addressFrom: input.addressFrom as any,
-      addressTo: input.addressTo as any,
-      parcel: input.parcel as any,
-      subtotalUsd: subtotalUsd.toFixed(2),
-      totalUsd: subtotalUsd.toFixed(2), // updated after shipping is selected
-      platformFeeBps: seller.payoutConfig
-        ? 250
-        : 250,
-    });
+    await db`
+      insert into orders (
+        id,
+        project_id,
+        seller_id,
+        buyer_wallet,
+        seller_wallet,
+        state,
+        shippo_shipment_id,
+        address_from,
+        address_to,
+        parcel,
+        subtotal_usd,
+        total_usd,
+        platform_fee_bps
+      ) values (
+        ${orderId},
+        ${projectId},
+        ${input.sellerId},
+        ${input.buyerWallet},
+        ${input.sellerWallet},
+        ${OrderState.INITIATED},
+        ${shipmentId},
+        ${db.json(input.addressFrom as any)},
+        ${db.json(input.addressTo as any)},
+        ${db.json(input.parcel as any)},
+        ${subtotalUsd.toFixed(2)},
+        ${subtotalUsd.toFixed(2)},
+        250
+      )
+    `;
 
-    // Insert order items
-    if (input.items.length > 0) {
-      await db.insert(orderItems).values(
-        input.items.map((item) => ({
-          id: `item_${generateId.order()}`,
-          orderId,
-          externalItemId: item.externalItemId,
-          name: item.name,
-          quantity: item.quantity,
-          unitPriceUsd: item.unitPriceUsd.toFixed(2),
-          weightOz: item.weightOz?.toFixed(2),
-          dimensions: item.dimensions as any,
-        }))
-      );
+    for (const item of input.items) {
+      await db`
+        insert into order_items (
+          id,
+          order_id,
+          external_item_id,
+          name,
+          quantity,
+          unit_price_usd,
+          weight_oz,
+          dimensions
+        ) values (
+          ${`item_${generateId.order()}`},
+          ${orderId},
+          ${item.externalItemId ?? null},
+          ${item.name},
+          ${item.quantity},
+          ${item.unitPriceUsd.toFixed(2)},
+          ${item.weightOz?.toFixed(2) ?? null},
+          ${item.dimensions
+            ? db.json(item.dimensions as any)
+            : null}
+        )
+      `;
     }
 
     return {
@@ -112,7 +136,7 @@ export class OrderService {
   async selectShipping(
     orderId: string,
     projectId: string,
-    input: SelectShippingInput
+    input: SelectShippingInput,
   ): Promise<{
     escrowAmountToken: string;
     exchangeRate: number;
@@ -120,11 +144,15 @@ export class OrderService {
     totalUsd: number;
     shippingCostUsd: number;
   }> {
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Order not found");
@@ -132,42 +160,37 @@ export class OrderService {
       throw err;
     }
 
-    if (order.state !== "INITIATED") {
+    if (order.state !== OrderState.INITIATED) {
       const err: any = new Error(
-        `Cannot select shipping in state ${order.state}. Expected INITIATED.`
+        `Cannot select shipping in state ${order.state}. Expected INITIATED.`,
       );
       err.statusCode = 409;
       throw err;
     }
 
-    // Purchase label from Shippo
     const label = await this.shippoBridge.purchaseLabel(input.rateId);
 
-    // Pin label PDF to IPFS
-    const labelCid = await this.pinataBridge.pinFile(
-      label.labelUrl,
-      `label_${orderId}`
-    );
+    const labelCid = await this.pinataBridge.pinFile(label.labelUrl, `label_${orderId}`);
 
     const shippingCostUsd = parseFloat(label.shippingCostUsd);
     const totalUsd = parseFloat(order.subtotalUsd) + shippingCostUsd;
     const { escrowAmountToken, exchangeRate } = convertOrderTotal(totalUsd);
 
-    await db
-      .update(orders)
-      .set({
-        selectedRateId: input.rateId,
-        trackingNumber: label.trackingNumber,
-        carrier: label.carrier,
-        labelUrl: label.labelUrl,
-        labelIpfsCid: labelCid,
-        shippingCostUsd: shippingCostUsd.toFixed(2),
-        totalUsd: totalUsd.toFixed(2),
-        escrowAmountToken,
-        exchangeRate: exchangeRate.toFixed(8),
-        updatedAt: new Date(),
-      })
-      .where(eq(orders.id, orderId));
+    await db`
+      update orders
+      set
+        selected_rate_id = ${input.rateId},
+        tracking_number = ${label.trackingNumber},
+        carrier = ${label.carrier},
+        label_url = ${label.labelUrl},
+        label_ipfs_cid = ${labelCid},
+        shipping_cost_usd = ${shippingCostUsd.toFixed(2)},
+        total_usd = ${totalUsd.toFixed(2)},
+        escrow_amount_token = ${escrowAmountToken},
+        exchange_rate = ${exchangeRate.toFixed(8)},
+        updated_at = now()
+      where id = ${orderId}
+    `;
 
     return { escrowAmountToken, exchangeRate, labelCid, totalUsd, shippingCostUsd };
   }
@@ -175,17 +198,21 @@ export class OrderService {
   async confirmEscrow(
     orderId: string,
     projectId: string,
-    input: ConfirmEscrowInput
+    input: ConfirmEscrowInput,
   ): Promise<{
     status: string;
     invoiceCid: string;
     payoutSchedule: PayoutSchedule;
   }> {
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Order not found");
@@ -193,9 +220,9 @@ export class OrderService {
       throw err;
     }
 
-    if (order.state !== "INITIATED") {
+    if (order.state !== OrderState.INITIATED) {
       const err: any = new Error(
-        `Cannot confirm escrow in state ${order.state}. Expected INITIATED.`
+        `Cannot confirm escrow in state ${order.state}. Expected INITIATED.`,
       );
       err.statusCode = 409;
       throw err;
@@ -207,11 +234,10 @@ export class OrderService {
       throw err;
     }
 
-    // Verify the escrow deposit on-chain
     const { verified, contractOrderId } = await this.blockchainBridge.verifyEscrowDeposit(
       input.txHash,
       order.escrowAmountToken,
-      order.buyerWallet
+      order.buyerWallet,
     );
 
     if (!verified) {
@@ -220,7 +246,6 @@ export class OrderService {
       throw err;
     }
 
-    // Pin invoice to IPFS
     const invoiceData = {
       orderId,
       buyerWallet: order.buyerWallet,
@@ -230,23 +255,24 @@ export class OrderService {
       escrowTxHash: input.txHash,
       timestamp: new Date().toISOString(),
     };
+
     const invoiceCid = await this.pinataBridge.pinJSON(invoiceData, `invoice_${orderId}`);
 
-    // Optimistic state update: INITIATED → ESCROWED
-    const [updated] = await db
-      .update(orders)
-      .set({
-        state: "ESCROWED",
-        escrowTxHash: input.txHash,
-        escrowContractOrderId: contractOrderId,
-        invoiceIpfsCid: invoiceCid,
-        escrowedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(orders.id, orderId), eq(orders.state, "INITIATED")))
-      .returning();
+    const updatedRows = await db<Order[]>`
+      update orders
+      set
+        state = ${OrderState.ESCROWED},
+        escrow_tx_hash = ${input.txHash},
+        escrow_contract_order_id = ${contractOrderId},
+        invoice_ipfs_cid = ${invoiceCid},
+        escrowed_at = now(),
+        updated_at = now()
+      where id = ${orderId}
+        and state = ${OrderState.INITIATED}
+      returning *
+    `;
 
-    if (!updated) {
+    if (!updatedRows[0]) {
       const err: any = new Error("State transition conflict; please retry");
       err.statusCode = 409;
       throw err;
@@ -274,17 +300,21 @@ export class OrderService {
   async confirmLabelPrinted(
     orderId: string,
     projectId: string,
-    input: ConfirmLabelPrintedInput
+    input: ConfirmLabelPrintedInput,
   ): Promise<{
     status: string;
     payoutAmountToken: string;
     txHash: string;
   }> {
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Order not found");
@@ -292,16 +322,16 @@ export class OrderService {
       throw err;
     }
 
-    if (order.state !== "ESCROWED") {
+    if (order.state !== OrderState.ESCROWED) {
       const err: any = new Error(
-        `Cannot confirm label printed in state ${order.state}. Expected ESCROWED.`
+        `Cannot confirm label printed in state ${order.state}. Expected ESCROWED.`,
       );
       err.statusCode = 409;
       throw err;
     }
 
     if (input.sellerWallet !== order.sellerWallet) {
-      const err: any = new Error("Wallet mismatch — not the order seller");
+      const err: any = new Error("Wallet mismatch - not the order seller");
       err.statusCode = 403;
       throw err;
     }
@@ -309,49 +339,48 @@ export class OrderService {
     const escrowAmountToken = order.escrowAmountToken ?? "0";
     const contractOrderId = order.escrowContractOrderId!;
 
-    // Pin receipt
     const receiptCid = await this.pinataBridge.pinJSON(
       { orderId, state: "LABEL_CREATED", timestamp: new Date().toISOString() },
-      `receipt_label_${orderId}`
+      `receipt_label_${orderId}`,
     );
 
-    // Advance state on-chain
     const { txHash: advanceTx } = await this.blockchainBridge.advanceState(
       contractOrderId,
       "LABEL_CREATED",
-      receiptCid
+      receiptCid,
     );
 
-    // Release 15% to seller
     const { txHash: releaseTx } = await this.blockchainBridge.releasePartial(
       contractOrderId,
-      PAYOUT_DEFAULTS.LABEL_CREATED_BPS
+      PAYOUT_DEFAULTS.LABEL_CREATED_BPS,
     );
 
-    const payoutAmountToken = bpsOfToken(escrowAmountToken, PAYOUT_DEFAULTS.LABEL_CREATED_BPS);
+    const payoutAmountToken = bpsOfToken(
+      escrowAmountToken,
+      PAYOUT_DEFAULTS.LABEL_CREATED_BPS,
+    );
 
-    // Record state transition
-    const [updated] = await db
-      .update(orders)
-      .set({
-        state: "LABEL_CREATED",
-        labelCreatedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(orders.id, orderId), eq(orders.state, "ESCROWED")))
-      .returning();
+    const updatedRows = await db<Order[]>`
+      update orders
+      set
+        state = ${OrderState.LABEL_CREATED},
+        label_created_at = now(),
+        updated_at = now()
+      where id = ${orderId}
+        and state = ${OrderState.ESCROWED}
+      returning *
+    `;
 
-    if (!updated) {
+    if (!updatedRows[0]) {
       const err: any = new Error("State transition conflict; please retry");
       err.statusCode = 409;
       throw err;
     }
 
-    // Record payout
     await this.payoutService.recordPayout({
       orderId,
       sellerId: order.sellerId,
-      state: "LABEL_CREATED",
+      state: OrderState.LABEL_CREATED,
       escrowAmountToken,
       percentageBps: PAYOUT_DEFAULTS.LABEL_CREATED_BPS,
       txHash: releaseTx,
@@ -367,20 +396,27 @@ export class OrderService {
       timestamp: new Date(),
     });
 
-    return { status: "LABEL_CREATED", payoutAmountToken, txHash: releaseTx };
+    return { status: OrderState.LABEL_CREATED, payoutAmountToken, txHash: releaseTx };
   }
 
-  async finalize(orderId: string, projectId: string): Promise<{
+  async finalize(
+    orderId: string,
+    projectId: string,
+  ): Promise<{
     status: string;
     finalPayoutToken: string;
     platformFeeToken: string;
     txHash: string;
   }> {
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Order not found");
@@ -388,18 +424,18 @@ export class OrderService {
       throw err;
     }
 
-    if (order.state !== "DELIVERED") {
+    if (order.state !== OrderState.DELIVERED) {
       const err: any = new Error(
-        `Cannot finalize in state ${order.state}. Expected DELIVERED.`
+        `Cannot finalize in state ${order.state}. Expected DELIVERED.`,
       );
       err.statusCode = 409;
       throw err;
     }
 
-    // Check grace period has passed
-    if (order.graceEndsAt && order.graceEndsAt > new Date()) {
+    const graceEndsAt = toDate(order.graceEndsAt);
+    if (graceEndsAt && graceEndsAt > new Date()) {
       const err: any = new Error(
-        `Grace period has not expired yet. Expires at ${order.graceEndsAt.toISOString()}`
+        `Grace period has not expired yet. Expires at ${graceEndsAt.toISOString()}`,
       );
       err.statusCode = 409;
       throw err;
@@ -411,20 +447,21 @@ export class OrderService {
 
     const { txHash, sellerAmount, feeAmount } = await this.blockchainBridge.releaseFinal(
       contractOrderId,
-      platformFeeBps
+      platformFeeBps,
     );
 
-    const [updated] = await db
-      .update(orders)
-      .set({
-        state: "FINALIZED",
-        finalizedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(orders.id, orderId), eq(orders.state, "DELIVERED")))
-      .returning();
+    const updatedRows = await db<Order[]>`
+      update orders
+      set
+        state = ${OrderState.FINALIZED},
+        finalized_at = now(),
+        updated_at = now()
+      where id = ${orderId}
+        and state = ${OrderState.DELIVERED}
+      returning *
+    `;
 
-    if (!updated) {
+    if (!updatedRows[0]) {
       const err: any = new Error("State transition conflict; please retry");
       err.statusCode = 409;
       throw err;
@@ -433,7 +470,7 @@ export class OrderService {
     await this.payoutService.recordPayout({
       orderId,
       sellerId: order.sellerId,
-      state: "FINALIZED",
+      state: OrderState.FINALIZED,
       escrowAmountToken,
       percentageBps: PAYOUT_DEFAULTS.FINALIZED_BPS,
       txHash,
@@ -450,22 +487,29 @@ export class OrderService {
     });
 
     return {
-      status: "FINALIZED",
+      status: OrderState.FINALIZED,
       finalPayoutToken: sellerAmount,
       platformFeeToken: feeAmount,
       txHash,
     };
   }
 
-  async getById(orderId: string, projectId: string): Promise<{
+  async getById(
+    orderId: string,
+    projectId: string,
+  ): Promise<{
     order: Order;
     items: OrderItem[];
   }> {
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(and(eq(orders.id, orderId), eq(orders.projectId, projectId)))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${orderId}
+        and project_id = ${projectId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Order not found");
@@ -473,10 +517,11 @@ export class OrderService {
       throw err;
     }
 
-    const items = await db
-      .select()
-      .from(orderItems)
-      .where(eq(orderItems.orderId, orderId));
+    const items = await db<OrderItem[]>`
+      select *
+      from order_items
+      where order_id = ${orderId}
+    `;
 
     return { order, items };
   }

@@ -1,10 +1,10 @@
-/**
+﻿/**
  * Currency utilities for USD <-> token conversion.
- * Exchange rates are mocked until a real oracle/feed is wired in.
+ * FLUSD is treated as a 1:1 USD-pegged token in this demo.
  */
 
-// Mock exchange rate: 1 XRP = 0.50 USD → 1 USD = 2 XRP tokens
-const MOCK_USD_PER_TOKEN = 0.5;
+// 1 FLUSD = 1 USD
+const FLUSD_USD_RATE = 1;
 
 /**
  * Convert a USD amount to token units (18-decimal string).
@@ -22,15 +22,14 @@ export function tokenToUsd(tokenAmount: string, exchangeRate: number): number {
 }
 
 /**
- * Returns a mock exchange rate (USD per token).
- * Replace with real oracle call when available.
+ * Returns the FLUSD/USD exchange rate.
  */
 export function getMockExchangeRate(): number {
-  return MOCK_USD_PER_TOKEN;
+  return FLUSD_USD_RATE;
 }
 
 /**
- * Calculate the token amount for a given USD total using the mock rate.
+ * Calculate the token amount for a given USD total using the pegged rate.
  */
 export function convertOrderTotal(totalUsd: number): {
   escrowAmountToken: string;

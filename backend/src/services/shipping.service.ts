@@ -1,6 +1,5 @@
-import { db } from "../db/client";
-import { orders } from "../db/schema";
-import { eq } from "drizzle-orm";
+﻿import { db } from "../db/client";
+import type { Order } from "../db/types";
 import {
   OrderState,
   PAYOUT_DEFAULTS,
@@ -14,7 +13,6 @@ import type { Address, Parcel, ShippingRate } from "../types/orders";
 import type { TrackingResult, WebhookHandleResult } from "../types/shipping";
 import { PayoutService } from "./payout.service";
 import { WebhookService } from "./webhook.service";
-import { bpsOfToken } from "../utils/currency";
 import { getStateTransitionQueue, queuesAvailable } from "../queue/queues";
 import { STATE_TRANSITION_JOB_OPTS } from "../queue/workers/state-transition.worker";
 
@@ -36,11 +34,14 @@ export class ShippingService {
   }
 
   async getTracking(orderId: string): Promise<TrackingResult> {
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where id = ${orderId}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order) {
       const err: any = new Error("Order not found");
@@ -49,17 +50,12 @@ export class ShippingService {
     }
 
     if (!order.carrier || !order.trackingNumber) {
-      const err: any = new Error(
-        "No tracking information available for this order",
-      );
+      const err: any = new Error("No tracking information available for this order");
       err.statusCode = 400;
       throw err;
     }
 
-    return this.shippoBridge.getTrackingStatus(
-      order.carrier,
-      order.trackingNumber,
-    );
+    return this.shippoBridge.getTrackingStatus(order.carrier, order.trackingNumber);
   }
 
   async processWebhook(payload: unknown): Promise<WebhookHandleResult> {
@@ -69,12 +65,14 @@ export class ShippingService {
       return result;
     }
 
-    // Look up the order by tracking number
-    const [order] = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.trackingNumber, result.trackingNumber))
-      .limit(1);
+    const orderRows = await db<Order[]>`
+      select *
+      from orders
+      where tracking_number = ${result.trackingNumber}
+      limit 1
+    `;
+
+    const order = orderRows[0];
 
     if (!order || !order.escrowContractOrderId) {
       return {
@@ -91,12 +89,12 @@ export class ShippingService {
     let newState: OrderState | null = null;
     let payoutBps: number | null = null;
 
-    if (escrowEvent === "SHIPPED" && order.state === "LABEL_CREATED") {
+    if (escrowEvent === "SHIPPED" && order.state === OrderState.LABEL_CREATED) {
       newState = OrderState.SHIPPED;
       payoutBps = PAYOUT_DEFAULTS.SHIPPED_BPS;
     } else if (
       escrowEvent === "DELIVERED" &&
-      (order.state === "SHIPPED" || order.state === "IN_TRANSIT")
+      (order.state === OrderState.SHIPPED || order.state === OrderState.IN_TRANSIT)
     ) {
       newState = OrderState.DELIVERED;
       payoutBps = PAYOUT_DEFAULTS.DELIVERED_BPS;
@@ -107,7 +105,6 @@ export class ShippingService {
     }
 
     try {
-      // When Redis is available, offload the heavy work to the state-transition queue
       const stateQueue = getStateTransitionQueue();
       if (queuesAvailable() && stateQueue) {
         await stateQueue.add(
@@ -125,7 +122,6 @@ export class ShippingService {
           STATE_TRANSITION_JOB_OPTS,
         );
       } else {
-        // Inline fallback: IPFS pin + blockchain + DB update + payout
         const receiptCid = await this.pinataBridge.pinJSON(
           {
             orderId: order.id,
@@ -142,28 +138,38 @@ export class ShippingService {
           receiptCid,
         );
 
-        const { txHash: releaseTx } =
-          await this.blockchainBridge.releasePartial(
-            contractOrderId,
-            payoutBps,
-          );
+        const { txHash: releaseTx } = await this.blockchainBridge.releasePartial(
+          contractOrderId,
+          payoutBps,
+        );
 
         const now = new Date();
-        const updateData: Record<string, any> = {
-          state: newState,
-          updatedAt: now,
-        };
-
         if (newState === OrderState.SHIPPED) {
-          updateData.shippedAt = now;
+          await db`
+            update orders
+            set
+              state = ${newState},
+              shipped_at = ${now},
+              updated_at = ${now}
+            where id = ${order.id}
+          `;
         } else if (newState === OrderState.DELIVERED) {
-          updateData.deliveredAt = now;
-          updateData.graceEndsAt = new Date(
-            now.getTime() + GRACE_PERIOD_HOURS * 60 * 60 * 1000,
-          );
+          await db`
+            update orders
+            set
+              state = ${newState},
+              delivered_at = ${now},
+              grace_ends_at = ${new Date(now.getTime() + GRACE_PERIOD_HOURS * 60 * 60 * 1000)},
+              updated_at = ${now}
+            where id = ${order.id}
+          `;
+        } else {
+          await db`
+            update orders
+            set state = ${newState}, updated_at = ${now}
+            where id = ${order.id}
+          `;
         }
-
-        await db.update(orders).set(updateData).where(eq(orders.id, order.id));
 
         await this.payoutService.recordPayout({
           orderId: order.id,
@@ -184,23 +190,16 @@ export class ShippingService {
           timestamp: now,
         });
 
-        await this.webhookService.dispatch(
-          order.projectId,
-          "order.status_updated",
-          {
-            orderId: order.id,
-            state: newState,
-            trackingNumber: result.trackingNumber,
-            escrowEvent,
-            txHash: advanceTx,
-          },
-        );
+        await this.webhookService.dispatch(order.projectId, "order.status_updated", {
+          orderId: order.id,
+          state: newState,
+          trackingNumber: result.trackingNumber,
+          escrowEvent,
+          txHash: advanceTx,
+        });
       }
     } catch (err) {
-      console.error(
-        "[shipping-service] Failed to advance state from webhook:",
-        err,
-      );
+      console.error("[shipping-service] Failed to advance state from webhook:", err);
     }
 
     return result;

@@ -1,14 +1,13 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+﻿import postgres from "postgres";
 import { env } from "../config/env";
-import * as schema from "./schema";
 
-const queryClient = postgres(env.DATABASE_URL, {
-  ssl: env.NODE_ENV === "production" ? "require" : false,
-  max: 10, // connection pool size
+const ssl = env.NODE_ENV === "production" ? "require" : false;
+
+export const db = postgres(env.DATABASE_URL, {
+  ssl,
+  max: 10,
   idle_timeout: 30,
+  transform: postgres.camel,
 });
-
-export const db = drizzle(queryClient, { schema });
 
 export type DB = typeof db;

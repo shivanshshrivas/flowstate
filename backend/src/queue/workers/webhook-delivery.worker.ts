@@ -1,6 +1,5 @@
-import { Worker, type Job, type ConnectionOptions } from "bullmq";
+﻿import { Worker, type Job, type ConnectionOptions } from "bullmq";
 import { db } from "../../db/client";
-import { webhookLogs } from "../../db/schema";
 import { generateId } from "../../utils/id-generator";
 import { signWebhook } from "../../utils/crypto";
 
@@ -40,26 +39,31 @@ async function processWebhookDelivery(
   } catch (err: any) {
     statusCode = 0;
     responseBody = err?.message ?? "Network error";
-    throw err; // Re-throw so BullMQ retries
+    throw err;
   } finally {
-    // Log the delivery attempt
-    db.insert(webhookLogs)
-      .values({
-        id: generateId.webhookLog(),
-        registrationId,
-        projectId,
-        eventType,
-        payload: payload as Record<string, unknown>,
-        statusCode,
-        responseBody,
-        deliveredAt:
-          statusCode && statusCode >= 200 && statusCode < 300
-            ? new Date()
-            : undefined,
-      })
-      .catch(() => {
-        /* ignore log failures */
-      });
+    db`
+      insert into webhook_logs (
+        id,
+        registration_id,
+        project_id,
+        event_type,
+        payload,
+        status_code,
+        response_body,
+        delivered_at
+      ) values (
+        ${generateId.webhookLog()},
+        ${registrationId},
+        ${projectId},
+        ${eventType},
+        ${db.json(payload as any)},
+        ${statusCode ?? null},
+        ${responseBody ?? null},
+        ${statusCode && statusCode >= 200 && statusCode < 300 ? new Date() : null}
+      )
+    `.catch(() => {
+      /* ignore log failures */
+    });
   }
 
   if (statusCode && (statusCode < 200 || statusCode >= 300)) {
@@ -81,9 +85,7 @@ export function createWebhookDeliveryWorker(
   );
 
   worker.on("completed", (job) => {
-    console.log(
-      `[webhook-delivery] Job ${job.id} completed for ${job.data.url}`,
-    );
+    console.log(`[webhook-delivery] Job ${job.id} completed for ${job.data.url}`);
   });
 
   worker.on("failed", (job, error) => {
@@ -93,7 +95,6 @@ export function createWebhookDeliveryWorker(
   return worker;
 }
 
-// Default job options for webhook delivery
 export const WEBHOOK_DELIVERY_JOB_OPTS = {
   attempts: 5,
   backoff: {
