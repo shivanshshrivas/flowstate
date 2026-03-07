@@ -73,7 +73,7 @@ async function getTrackingStatus(carrier, trackingNumber) {
     carrier,
     trackingNumber,
     status: tracking.trackingStatus?.status ?? "UNKNOWN",
-    substatus: tracking.trackingStatus?.substatus ?? null,
+    substatus: tracking.trackingStatus?.substatus?.code ?? null,
     statusDetails: tracking.trackingStatus?.statusDetails ?? "",
     eta: tracking.eta ?? null,
     history: (tracking.trackingHistory ?? []).map((h) => ({
@@ -85,7 +85,7 @@ async function getTrackingStatus(carrier, trackingNumber) {
     })),
     escrowEvent: mapToEscrowEvent(
       tracking.trackingStatus?.status ?? "UNKNOWN",
-      tracking.trackingStatus?.substatus ?? null
+      tracking.trackingStatus?.substatus?.code ?? null
     ),
   };
 }
