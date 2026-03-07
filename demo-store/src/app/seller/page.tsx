@@ -1,5 +1,6 @@
 "use client";
 
+import { RequireRole } from "@/components/guards/RequireRole";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import {
   Package, TrendingUp, DollarSign, Clock, AlertTriangle,
-  Download, CheckCircle, ExternalLink, PlusCircle
+  Download, CheckCircle, ExternalLink, PlusCircle, BotMessageSquare
 } from "lucide-react";
 import { MOCK_ORDERS, MOCK_SELLER_METRICS, MOCK_PAYOUT_RECORDS, MOCK_PRODUCTS } from "@/lib/mock-data";
 import { formatUsd, formatDate, formatDateTime } from "@/lib/utils";
@@ -17,6 +18,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useOrderStore } from "@/stores/order-store";
 import { OrderState } from "@/lib/flowstate/types";
+import AgentChat from "@/components/chat/AgentChat";
 
 const SELLER_ID = "seller-001";
 
@@ -30,7 +32,7 @@ const ACTION_LABELS: Partial<Record<OrderState, string>> = {
   [OrderState.LABEL_CREATED]: "Confirm Shipped",
 };
 
-export default function SellerDashboardPage() {
+function SellerDashboardContent() {
   const { orders, advanceOrderState } = useOrderStore();
   const sellerOrders = orders.filter((o) => o.seller_id === SELLER_ID);
   const metrics = MOCK_SELLER_METRICS;
@@ -57,6 +59,10 @@ export default function SellerDashboardPage() {
           <TabsTrigger value="products">Products</TabsTrigger>
           <TabsTrigger value="payouts">Payouts</TabsTrigger>
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
+          <TabsTrigger value="ai" className="flex items-center gap-1.5">
+            <BotMessageSquare className="h-3.5 w-3.5" />
+            AI Assistant
+          </TabsTrigger>
         </TabsList>
 
         {/* Orders Tab */}
@@ -200,7 +206,7 @@ export default function SellerDashboardPage() {
                 icon: Package,
                 label: "Total Orders",
                 value: metrics.total_orders.toString(),
-                sub: `${metrics.active_escrows} active escrows`,
+                sub: `${metrics.active_escrows} in progress`,
                 color: "text-violet-400",
               },
               {
@@ -226,9 +232,9 @@ export default function SellerDashboardPage() {
               },
               {
                 icon: TrendingUp,
-                label: "Active Escrows",
+                label: "Active Orders",
                 value: metrics.active_escrows.toString(),
-                sub: "funds currently locked",
+                sub: "awaiting fulfillment",
                 color: "text-violet-400",
               },
             ].map(({ icon: Icon, label, value, sub, color }) => (
@@ -247,7 +253,49 @@ export default function SellerDashboardPage() {
             ))}
           </div>
         </TabsContent>
+
+        {/* AI Assistant Tab */}
+        <TabsContent value="ai">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <AgentChat
+                agentType="seller"
+                context={{ sellerId: SELLER_ID }}
+                agentName="Seller AI Assistant"
+                placeholder="Ask about your orders, payouts, or disputes..."
+                suggestions={[
+                  "Show my pending orders",
+                  "What are my metrics?",
+                  "How much have I been paid?",
+                  "Confirm label for order-008",
+                ]}
+              />
+            </div>
+            <div className="lg:col-span-1 space-y-4">
+              <Card>
+                <CardContent className="p-4 text-sm text-neutral-400 space-y-2">
+                  <p className="font-medium text-neutral-300">What can I ask?</p>
+                  <ul className="space-y-1.5 list-disc list-inside text-xs">
+                    <li>View and filter your orders by status</li>
+                    <li>Check payout history & pending amounts</li>
+                    <li>Confirm label printed to unlock 15% payout</li>
+                    <li>Respond to buyer disputes</li>
+                    <li>View your performance metrics</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function SellerDashboardPage() {
+  return (
+    <RequireRole roles={["seller", "admin"]}>
+      <SellerDashboardContent />
+    </RequireRole>
   );
 }

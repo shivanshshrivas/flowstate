@@ -1,5 +1,6 @@
 "use client";
 
+import { RequireRole } from "@/components/guards/RequireRole";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line,
 } from "recharts";
@@ -8,12 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
-  BarChart3, DollarSign, Shield, AlertTriangle, Clock, CheckCircle, XCircle
+  BarChart3, DollarSign, Shield, AlertTriangle, Clock, CheckCircle, XCircle, BotMessageSquare
 } from "lucide-react";
 import { MOCK_ANALYTICS, MOCK_SELLERS, MOCK_WEBHOOK_EVENTS } from "@/lib/mock-data";
 import { formatUsd, formatDateTime } from "@/lib/utils";
+import AgentChat from "@/components/chat/AgentChat";
 
-export default function AdminDashboardPage() {
+function AdminDashboardContent() {
   const analytics = MOCK_ANALYTICS;
 
   return (
@@ -30,6 +32,10 @@ export default function AdminDashboardPage() {
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="sellers">Sellers</TabsTrigger>
           <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
+          <TabsTrigger value="ai" className="flex items-center gap-1.5">
+            <BotMessageSquare className="h-3.5 w-3.5" />
+            AI Analyst
+          </TabsTrigger>
         </TabsList>
 
         {/* Analytics Tab */}
@@ -52,7 +58,7 @@ export default function AdminDashboardPage() {
                 },
                 {
                   icon: Shield,
-                  label: "Active Escrows",
+                  label: "Active Orders",
                   value: analytics.active_escrows.toString(),
                   color: "text-blue-400",
                 },
@@ -229,7 +235,47 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* AI Analyst Tab */}
+        <TabsContent value="ai">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <AgentChat
+                agentType="admin"
+                agentName="FlowState Admin AI"
+                placeholder="Ask about platform metrics, sellers, or webhooks..."
+                suggestions={[
+                  "How is the platform performing?",
+                  "Are there any flagged sellers?",
+                  "Show me gas costs breakdown",
+                  "Any failed webhook events?",
+                ]}
+              />
+            </div>
+            <div className="lg:col-span-1 space-y-4">
+              <Card>
+                <CardContent className="p-4 text-sm text-neutral-400 space-y-2">
+                  <p className="font-medium text-neutral-300">What can I ask?</p>
+                  <ul className="space-y-1.5 list-disc list-inside text-xs">
+                    <li>Platform-wide analytics & dispute rates</li>
+                    <li>Seller performance & flagged accounts</li>
+                    <li>Webhook health & failed events</li>
+                    <li>Gas spend breakdown by transaction type</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <RequireRole roles={["admin"]}>
+      <AdminDashboardContent />
+    </RequireRole>
   );
 }
