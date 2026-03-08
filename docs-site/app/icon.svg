@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="flowstate-gradient" x1="6" x2="58" y1="6" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#e27b34" />
+      <stop offset="1" stop-color="#8f3408" />
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="#1b1f29" />
+  <path fill="url(#flowstate-gradient)" d="M16 16h32v10H26v8h18v10H26v14H16z" />
+</svg>

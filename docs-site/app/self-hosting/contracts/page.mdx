@@ -1,0 +1,36 @@
+# Contracts
+
+The XRPL EVM contract package lives in `packages/contracts/`.
+
+## Setup
+
+```bash
+cd packages/contracts
+copy .env.example .env
+npm install
+```
+
+## Useful Commands
+
+```bash
+npm run build
+npm test
+npm run deploy:testnet
+npm run seed:testnet
+npm run demo:testnet
+```
+
+## Network Defaults
+
+- RPC: `https://rpc.testnet.xrplevm.org`
+- Chain ID: `1449000`
+- Explorer: `https://explorer.testnet.xrplevm.org`
+
+## Current Integration State
+
+- the contracts are real
+- the backend blockchain bridge is still stubbed
+- the demo store consumes contract addresses from env vars but still contains mock checkout behavior in places
+
+Document that distinction clearly for contributors so they do not assume the API server is already doing real on-chain settlement.
+

@@ -1,0 +1,38 @@
+# Install
+
+FlowState is integrated as a package, with backend APIs provided as a hosted service.
+
+## Package Access
+
+`@flowstate/gateway` is currently distributed as a private/beta package.
+
+```bash
+npm install @flowstate/gateway
+```
+
+If installation fails with auth or permissions, request package access from FlowState.
+
+## Primary Imports
+
+```ts
+import { FlowStateProvider, PayButton, OrderTracker } from "@flowstate/gateway";
+```
+
+## Backend Base URL
+
+Use hosted backend APIs at:
+
+`https://api.flowstate.xyz/api/v1`
+
+## Initial Setup Checklist
+
+1. Install package.
+2. Create project and API key (`POST /auth/projects/create`).
+3. Configure provider with `projectId` and `apiKey`.
+4. Register webhook destination (`POST /webhooks/register`).
+5. Verify checkout flow and webhook processing.
+
+## Roadmap Note
+
+`.claude/architecture.md` references additional SDK capabilities (for example broader component surfaces and server helpers). Treat those as planned unless exported in the package version you installed.
+

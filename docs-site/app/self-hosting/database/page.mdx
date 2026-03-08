@@ -1,0 +1,36 @@
+# Database
+
+The repo currently uses two different database concerns.
+
+## Demo Store Database
+
+The demo store expects Supabase for:
+
+- auth users
+- `public.users`
+- `public.sellers`
+- `public.products`
+- `public.platform_config`
+- `public.webhook_events`
+
+Run the SQL in `demo-store/scripts/seed.sql` inside the Supabase SQL editor.
+
+## Backend Database
+
+The backend uses Postgres directly and expects its own operational tables, including:
+
+- `projects`
+- `api_keys`
+- `orders`
+- `order_items`
+- `payouts`
+- `disputes`
+- `webhook_registrations`
+- `webhook_logs`
+
+The backend types live in `backend/src/db/types.ts`. There is no migration tool wired into the current backend package, so schema creation needs to be handled explicitly before sharing the project with other developers.
+
+## Important Distinction
+
+The demo store Supabase schema is not the same thing as the backend operational schema. Document both separately so contributors do not assume one seed script covers the full system.
+

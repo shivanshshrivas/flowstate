@@ -1,0 +1,36 @@
+# Local Dev
+
+Use this path when you want the backend and store running together.
+
+## Recommended Order
+
+1. Set up Supabase and run the seed SQL.
+2. Start the backend.
+3. Start the demo store.
+4. Optional: start the docs site.
+5. Optional: deploy contracts and add addresses to the demo store env file.
+
+## Backend
+
+```bash
+cd backend
+copy .env.example .env
+npm install
+npm run dev
+```
+
+## Demo Store
+
+```bash
+cd demo-store
+copy .env.example .env.local
+npm install
+npm run dev
+```
+
+## Notes
+
+- The backend fails fast if `DATABASE_URL` or `SHIPPO_KEY` are missing.
+- Redis is optional. Without it, cron and webhook delivery run in fallback mode.
+- The demo store can still render with mock data if Supabase is not configured.
+

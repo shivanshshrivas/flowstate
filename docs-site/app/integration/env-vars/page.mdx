@@ -1,0 +1,45 @@
+# Env Vars
+
+This page focuses on variables needed by an external integrator using the package + hosted APIs.
+
+## Storefront / Frontend
+
+Required:
+
+- `NEXT_PUBLIC_FLOWSTATE_PROJECT_ID`
+- `NEXT_PUBLIC_FLOWSTATE_API_KEY`
+- `NEXT_PUBLIC_FLOWSTATE_NETWORK` (`testnet` or `mainnet`)
+
+Common wallet/chain settings:
+
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+- `NEXT_PUBLIC_MOCK_RLUSD_ADDRESS`
+- `NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS`
+- `NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS`
+- `NEXT_PUBLIC_PAYMENT_SPLITTER_ADDRESS`
+
+## Platform Server (Webhook + Backend Calls)
+
+- `FLOWSTATE_API_KEY` (server-side key for direct API usage)
+- `FLOWSTATE_WEBHOOK_SECRET` (returned by `/webhooks/register`)
+- `FLOWSTATE_API_BASE_URL` (default `https://api.flowstate.xyz`)
+
+Never expose server-side secrets to client bundles.
+
+## Optional: Self-Hosted Operator Variables
+
+If your team runs backend infrastructure directly, backend service variables are defined in:
+
+- `backend/.env.example`
+- `backend/src/config/env.ts`
+
+Core operator variables:
+
+- `DATABASE_URL`
+- `SHIPPO_KEY`
+- `REDIS_URL` (optional queue mode)
+- `PLATFORM_FEE_BPS`
+- `GRACE_PERIOD_HOURS`
+
+See [Internal Ops (Legacy)](/self-hosting/local-dev) for local operator docs.
+

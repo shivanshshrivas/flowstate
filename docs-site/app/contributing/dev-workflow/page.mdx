@@ -1,0 +1,31 @@
+# Dev Workflow
+
+Use a narrow workflow for changes so contributors do not accidentally mix architecture work, API work, and frontend demo work in one patch.
+
+## Recommended Flow
+
+1. Read the relevant docs page and inspect the local code path.
+2. Change one subsystem at a time.
+3. Update docs in the same patch when behavior or setup changes.
+4. Verify the affected package with its local build or test command.
+
+## Good Boundaries
+
+- backend API change plus backend tests
+- contract change plus contract tests
+- demo-store UI change plus demo-store build
+- docs update plus supporting env example or README update
+
+## Docs Authoring
+
+- add or edit docs under `docs-site/app/`
+- create a `page.mdx` file for each route you want to expose
+- update the nearest `_meta.js` file so the page appears in the right sidebar order
+- run `cd docs-site && npm run build` before sending docs changes upstream
+
+## Current Gotchas
+
+- the architecture doc describes the intended end-state, not just current code
+- the backend and contract payout defaults are not fully aligned yet
+- some backend bridges are still stubs, so docs should not oversell live integrations
+

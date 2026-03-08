@@ -1,0 +1,58 @@
+# Events And Webhooks
+
+FlowState has three event surfaces: internal event bus, outbound webhooks, and WebSocket pushes.
+
+## Internal Event Names
+
+- `order:state_changed`
+- `dispute:created`
+- `dispute:resolved`
+- `payout:recorded`
+
+These are emitted inside the backend event bus.
+
+## Outbound Webhook Event Names (Primary)
+
+- `order.state_changed`
+- `dispute.created`
+- `dispute.resolved`
+
+These are dispatched to registered webhook endpoints.
+
+Compatibility note: some shipping fallback paths may emit `order.status_updated`. Treat unknown event names as no-op unless explicitly supported by your handler.
+
+## WebSocket Event Names
+
+- `order_state_changed`
+- `dispute_created`
+- `pong`
+- `error`
+
+Defined message types also include `escrow_created`, `chat_response`, and `payout_released`, but not all are emitted in current bootstrap wiring.
+
+## Webhook Payload Example
+
+```json
+{
+  "event": "order.state_changed",
+  "data": {
+    "order_id": "ord_123",
+    "previous_state": "LABEL_CREATED",
+    "new_state": "SHIPPED",
+    "tx_hash": "0x..."
+  },
+  "timestamp": "2026-03-07T12:00:00.000Z"
+}
+```
+
+## Headers
+
+- `X-FlowState-Signature: sha256=<hex>`
+- `X-FlowState-Event: <event>`
+
+## Security
+
+- Verify signature against raw body bytes.
+- Ignore unknown event names safely.
+- Make handlers idempotent.
+

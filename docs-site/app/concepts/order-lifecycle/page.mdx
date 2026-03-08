@@ -1,0 +1,49 @@
+# Order Lifecycle
+
+FlowState order state is managed as a finite state machine in backend constants.
+
+- `INITIATED`
+- `ESCROWED`
+- `LABEL_CREATED`
+- `SHIPPED`
+- `IN_TRANSIT`
+- `DELIVERED`
+- `FINALIZED`
+- `DISPUTED`
+
+## Primary Flow
+
+```text
+INITIATED -> ESCROWED -> LABEL_CREATED -> SHIPPED -> IN_TRANSIT -> DELIVERED -> FINALIZED
+                                                         \
+                                                          -> DISPUTED
+```
+
+## State Transition Triggers
+
+- `POST /orders/create` creates order in `INITIATED`
+- `POST /orders/:id/confirm-escrow` moves `INITIATED -> ESCROWED`
+- `POST /orders/:id/confirm-label-printed` moves `ESCROWED -> LABEL_CREATED`
+- Shippo tracking webhook processing advances to `SHIPPED` and later `DELIVERED`
+- `POST /orders/:id/finalize` moves `DELIVERED -> FINALIZED` after grace period
+- `POST /disputes/create` moves eligible delivered orders into `DISPUTED`
+
+## Payout Defaults (Backend Source Of Truth)
+
+From `backend/src/config/constants.ts`:
+
+- `LABEL_CREATED`: 1500 bps (15%)
+- `SHIPPED`: 1500 bps (15%)
+- `DELIVERED`: 3500 bps (35%)
+- `FINALIZED`: 3500 bps (35%)
+- Platform fee default: 250 bps (2.5%)
+- Grace period default: 48 hours
+
+## Dispute Timers
+
+- Seller response deadline: 72 hours from dispute open
+- Review window after seller contest: 7 days
+
+## Roadmap Note
+
+`.claude/architecture.md` contains broader lifecycle narratives. For live integrations, treat route behavior and constants in `backend/src` as authoritative.

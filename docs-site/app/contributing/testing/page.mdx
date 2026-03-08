@@ -1,0 +1,40 @@
+# Testing
+
+Each major package has its own verification path.
+
+## Backend
+
+```bash
+cd backend
+npm test
+npm run typecheck
+```
+
+## Demo Store
+
+```bash
+cd demo-store
+npm run build
+```
+
+## Contracts
+
+```bash
+cd packages/contracts
+npm test
+```
+
+## Docs Site
+
+```bash
+cd docs-site
+npm run build
+```
+
+## What To Verify For Docs-Related Changes
+
+- setup steps still match real files
+- env var names match code
+- webhook payload examples match backend behavior
+- links and commands are still valid from the documented working directory
+

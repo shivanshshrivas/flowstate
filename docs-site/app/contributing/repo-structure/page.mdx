@@ -1,0 +1,47 @@
+# Repo Structure
+
+Use this map before making cross-cutting changes.
+
+## Top-Level Directories
+
+- `backend/` - API server, Postgres access, queues, cron, events, tests
+- `demo-store/` - storefront, mock gateway mirror, auth routes, webhook receiver
+- `docs/` - older architecture and background notes, including `project-breakdown.md`
+- `docs-site/` - Nextra documentation app
+- `docs-site/app/` - canonical docs source as file-based MDX routes
+- `packages/contracts/` - Hardhat contract package
+- `mcp-agents/` - agent-related workspace
+- `pinata/` - Pinata experiments or support scripts
+- `shippo/` - shipping integration experiments or support scripts
+
+## Backend Shape
+
+Important backend folders:
+
+- `src/routes`
+- `src/services`
+- `src/bridges`
+- `src/db`
+- `src/queue`
+- `src/ws`
+- `src/cron`
+
+## Demo Store Shape
+
+Important demo-store folders:
+
+- `src/app`
+- `src/components`
+- `src/lib/flowstate`
+- `src/lib`
+- `src/stores`
+
+## Contracts Shape
+
+Important contract folders:
+
+- `contracts`
+- `ignition/modules`
+- `scripts`
+- `test`
+

@@ -1,0 +1,74 @@
+# Backend Webhooks
+
+Use webhooks to sync order and dispute state into your platform database.
+
+## 1. Register Destination
+
+```http
+POST /api/v1/webhooks/register
+Authorization: Bearer fs_live_...
+```
+
+```json
+{
+  "url": "https://your-app.example.com/api/webhooks/flowstate",
+  "events": ["order.state_changed", "dispute.created", "dispute.resolved"]
+}
+```
+
+Response includes:
+
+- `registration_id`
+- `secret`
+- `url`
+- `events`
+
+Persist `secret` immediately.
+
+## 2. Verify Signature In Handler
+
+```ts
+import crypto from "node:crypto";
+
+function verifyFlowStateSignature(rawBody: string, header: string | null, secret: string): boolean {
+  if (!header?.startsWith("sha256=")) return false;
+  const received = header.slice("sha256=".length);
+  const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+}
+```
+
+## 3. Process Event Payload
+
+Incoming JSON shape:
+
+```json
+{
+  "event": "order.state_changed",
+  "data": {
+    "order_id": "fs_ord_123",
+    "previous_state": "LABEL_CREATED",
+    "new_state": "SHIPPED",
+    "tx_hash": "0x..."
+  },
+  "timestamp": "2026-03-07T12:00:00.000Z"
+}
+```
+
+Handler rules:
+
+- Verify signature before trusting payload.
+- Branch on `event`.
+- Use idempotent writes keyed by event + order/dispute IDs.
+- Return `2xx` only after durable processing.
+
+## Retry Behavior
+
+- Queue mode (Redis enabled): BullMQ retries up to 5 attempts with exponential backoff.
+- Inline mode (Redis disabled): in-process dispatch without queue retries.
+
+## Related
+
+- [Webhook Model](/concepts/webhook-model)
+- [Events And Webhooks](/reference/events-and-webhooks)
+

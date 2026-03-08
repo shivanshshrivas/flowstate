@@ -1,0 +1,66 @@
+# Frontend Integration
+
+Embed FlowState on buyer-facing pages with a provider plus one-click button.
+
+## 1. Wrap App With Provider
+
+```tsx
+import { FlowStateProvider } from "@flowstate/gateway";
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <FlowStateProvider
+      config={{
+        projectId: process.env.NEXT_PUBLIC_FLOWSTATE_PROJECT_ID!,
+        apiKey: process.env.NEXT_PUBLIC_FLOWSTATE_API_KEY!,
+        network: "testnet",
+        contracts: {
+          escrowStateMachine: process.env.NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS as `0x${string}`,
+          disputeResolver: process.env.NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS as `0x${string}`,
+          paymentSplitter: process.env.NEXT_PUBLIC_PAYMENT_SPLITTER_ADDRESS as `0x${string}`,
+          mockRLUSD: process.env.NEXT_PUBLIC_MOCK_RLUSD_ADDRESS as `0x${string}`
+        }
+      }}
+    >
+      {children}
+    </FlowStateProvider>
+  );
+}
+```
+
+## 2. Add One-Click Button
+
+```tsx
+import { PayButton } from "@flowstate/gateway";
+
+export function ProductBuy({ product }: { product: any }) {
+  return <PayButton product={product} />;
+}
+```
+
+The button flow maps to backend API calls in this order:
+
+1. `POST /api/v1/orders/create`
+2. `POST /api/v1/orders/:id/select-shipping`
+3. `POST /api/v1/orders/:id/confirm-escrow`
+
+## 3. Show Order Progress
+
+```tsx
+import { OrderTracker } from "@flowstate/gateway";
+
+export function OrderStatus({ order }: { order: any }) {
+  return <OrderTracker order={order} />;
+}
+```
+
+## Wallet / Network Expectations
+
+- Wallet connection is required before checkout.
+- XRPL EVM testnet chain ID: `1449000`.
+- Contract addresses should be provided through environment variables.
+
+## If You Build A Custom UI
+
+You can skip package UI components and call backend endpoints directly. See [API Endpoints](/reference/api-endpoints).
+

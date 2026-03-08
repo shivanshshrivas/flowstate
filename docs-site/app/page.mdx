@@ -1,0 +1,69 @@
+import { Callout, Cards } from 'nextra/components'
+
+export const metadata = {
+  description: 'FlowState integration docs for package onboarding, workflows, and backend APIs.'
+}
+
+# FlowState Docs
+
+FlowState is packaged gateway software for e-commerce platforms that need:
+
+- one-click crypto checkout
+- shipment-linked order state transitions
+- webhook-driven status sync
+- XRPL-based escrow and payout workflows
+
+<Callout type="info">
+  Package-first integration is the default path. API contracts on this site are
+  sourced from `backend/src/routes/*`. Items from `.claude/architecture.md`
+  that are not implemented are marked as roadmap notes.
+</Callout>
+
+## Start Here
+
+<Cards className="fs-home-grid" num={2}>
+  <Cards.Card href="/quickstart" title="Quickstart">
+    Fastest path to embed the FlowState checkout button.
+  </Cards.Card>
+  <Cards.Card href="/concepts/architecture-overview" title="Architecture Overview">
+    How package, API groups, shipping, and webhooks connect.
+  </Cards.Card>
+  <Cards.Card href="/integration/frontend" title="Frontend Integration">
+    Add `FlowStateProvider`, `PayButton`, and `OrderTracker`.
+  </Cards.Card>
+  <Cards.Card href="/reference/api-endpoints" title="API Endpoints">
+    Full `/api/v1` backend surface grouped by domain.
+  </Cards.Card>
+</Cards>
+
+## Integration Workflow
+
+1. Install `@flowstate/gateway` in your storefront.
+2. Create a project and API key (`POST /api/v1/auth/projects/create`).
+3. Wrap your app with `FlowStateProvider`.
+4. Add `PayButton` to product/cart surfaces.
+5. Register a webhook endpoint (`POST /api/v1/webhooks/register`).
+6. Process state updates from webhook events and API reads.
+
+## API Groups
+
+- Auth: project creation and key rotation
+- Orders: checkout lifecycle and state transitions
+- Shipping: rate shopping, tracking, inbound Shippo webhook
+- Sellers: onboarding, orders, metrics, payouts
+- Disputes: create, respond, resolve
+- Platform: analytics, seller risk views, gas reports
+- Webhooks: destination registration and delivery logs
+- Agents: buyer/seller/admin chat routing
+
+## Reference Material
+
+- [API Endpoints](/reference/api-endpoints)
+- [Events And Webhooks](/reference/events-and-webhooks)
+- [Troubleshooting](/reference/troubleshooting)
+
+## Internal / Legacy Docs
+
+Operational local-stack docs are still available under
+[Internal Ops (Legacy)](/self-hosting/local-dev) for team contributors.
+
