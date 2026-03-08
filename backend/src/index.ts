@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import { env } from "./config/env";
 import { errorHandler } from "./middleware/error-handler";
@@ -169,6 +170,7 @@ async function bootstrap() {
     },
   });
 
+  await app.register(cors, { origin: true });
   await app.register(sensible);
 
   app.setErrorHandler(errorHandler);

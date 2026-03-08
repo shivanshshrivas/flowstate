@@ -1,6 +1,6 @@
 {
   "name": "@shivanshshrivas/flowstate",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "React + Node SDK for the FlowState escrow payment gateway",
   "author": "Shivansh Shrivas",
   "license": "MIT",
