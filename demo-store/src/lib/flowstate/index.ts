@@ -12,5 +12,5 @@ export {
   type OnboardingResult,
   type OnboardingWizardProps,
 } from "./client/OnboardingWizard";
-export { MockRLUSDAbi } from "./contracts/MockRLUSD.abi";
+export { FLUSDAbi } from "./contracts/FLUSD.abi";
 export { EscrowStateMachineAbi } from "./contracts/EscrowStateMachine.abi";

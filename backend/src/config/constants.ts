@@ -21,12 +21,13 @@ export enum DisputeStatus {
 
 // Default payout schedule in basis points (bps) per state transition.
 // 1 bps = 0.01%, so 1500 bps = 15%.
-// Total seller payout: 15+15+35+35 = 100% (platform fee deducted at FINALIZED).
+// Total seller payout: 15+15+20+35+15 = 100% (platform fee deducted at FINALIZED).
 export const PAYOUT_DEFAULTS = {
   LABEL_CREATED_BPS: 1500, // 15% when label is printed
   SHIPPED_BPS: 1500,       // 15% at first carrier scan
+  IN_TRANSIT_BPS: 2000,    // 20% at regional sort facility
   DELIVERED_BPS: 3500,     // 35% at confirmed delivery
-  FINALIZED_BPS: 3500,     // 35% after grace period (minus platform fee)
+  FINALIZED_BPS: 1500,     // 15% after grace period (minus platform fee)
 } as const;
 
 export const PLATFORM_FEE_BPS_DEFAULT = 250; // 2.5%

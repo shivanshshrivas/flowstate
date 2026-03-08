@@ -6,19 +6,12 @@ import {
 } from "../../__tests__/helpers/mocks";
 import { makeOrder, makeDispute } from "../../__tests__/helpers/fixtures";
 
-vi.mock("../../db/client", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue([]),
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-  },
-}));
+vi.mock("../../db/client", () => {
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
+});
 
 vi.mock("../../events/emitter", () => ({
   flowStateEmitter: {
@@ -58,10 +51,10 @@ describe("DisputeService", () => {
         escrowContractOrderId: "contract_ord_1",
         graceEndsAt: new Date(Date.now() + 60 * 60 * 1000),
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const dispute = makeDispute({ id: "fs_dis_test123", orderId: order.id });
-      (db.returning as any).mockResolvedValueOnce([dispute]);
+      (db as any).mockResolvedValueOnce([dispute]);
 
       const result = await service.create(order.projectId, {
         orderId: order.id,
@@ -80,7 +73,7 @@ describe("DisputeService", () => {
 
     it("should throw 409 if order not DELIVERED", async () => {
       const order = makeOrder({ state: "SHIPPED" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(
         service.create(order.projectId, {
@@ -96,7 +89,7 @@ describe("DisputeService", () => {
         state: "DELIVERED",
         graceEndsAt: new Date(Date.now() - 1000),
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(
         service.create(order.projectId, {
@@ -111,12 +104,12 @@ describe("DisputeService", () => {
   describe("respond", () => {
     it("should accept dispute and refund buyer", async () => {
       const dispute = makeDispute({ status: "OPEN" });
-      (db.limit as any).mockResolvedValueOnce([dispute]);
+      (db as any).mockResolvedValueOnce([dispute]);
       const order = makeOrder({
         id: dispute.orderId,
         escrowContractOrderId: "contract_ord_1",
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.respond(dispute.id, order.projectId, {
         action: "accept" as const,
@@ -129,9 +122,9 @@ describe("DisputeService", () => {
 
     it("should contest dispute with seller evidence", async () => {
       const dispute = makeDispute({ status: "OPEN" });
-      (db.limit as any).mockResolvedValueOnce([dispute]);
+      (db as any).mockResolvedValueOnce([dispute]);
       const order = makeOrder({ id: dispute.orderId });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.respond(dispute.id, order.projectId, {
         action: "contest" as const,
@@ -145,9 +138,9 @@ describe("DisputeService", () => {
 
     it("should throw 409 if dispute not OPEN", async () => {
       const dispute = makeDispute({ status: "RESOLVED_BUYER" });
-      (db.limit as any).mockResolvedValueOnce([dispute]);
+      (db as any).mockResolvedValueOnce([dispute]);
       const order = makeOrder({ id: dispute.orderId });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(
         service.respond(dispute.id, order.projectId, {
@@ -160,9 +153,9 @@ describe("DisputeService", () => {
   describe("resolve", () => {
     it("should resolve dispute with refund resolution", async () => {
       const dispute = makeDispute({ status: "SELLER_RESPONDED" });
-      (db.limit as any).mockResolvedValueOnce([dispute]);
+      (db as any).mockResolvedValueOnce([dispute]);
       const order = makeOrder({ id: dispute.orderId });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.resolve(dispute.id, order.projectId, {
         resolution: "refund" as const,
@@ -182,9 +175,9 @@ describe("DisputeService", () => {
 
     it("should resolve dispute with split resolution", async () => {
       const dispute = makeDispute({ status: "SELLER_RESPONDED" });
-      (db.limit as any).mockResolvedValueOnce([dispute]);
+      (db as any).mockResolvedValueOnce([dispute]);
       const order = makeOrder({ id: dispute.orderId });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.resolve(dispute.id, order.projectId, {
         resolution: "split" as const,

@@ -92,10 +92,10 @@ export class ShippingService {
     if (escrowEvent === "SHIPPED" && order.state === OrderState.LABEL_CREATED) {
       newState = OrderState.SHIPPED;
       payoutBps = PAYOUT_DEFAULTS.SHIPPED_BPS;
-    } else if (
-      escrowEvent === "DELIVERED" &&
-      (order.state === OrderState.SHIPPED || order.state === OrderState.IN_TRANSIT)
-    ) {
+    } else if (escrowEvent === "IN_TRANSIT" && order.state === OrderState.SHIPPED) {
+      newState = OrderState.IN_TRANSIT;
+      payoutBps = PAYOUT_DEFAULTS.IN_TRANSIT_BPS;
+    } else if (escrowEvent === "DELIVERED" && order.state === OrderState.IN_TRANSIT) {
       newState = OrderState.DELIVERED;
       payoutBps = PAYOUT_DEFAULTS.DELIVERED_BPS;
     }

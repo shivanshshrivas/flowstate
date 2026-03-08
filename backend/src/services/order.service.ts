@@ -290,6 +290,7 @@ export class OrderService {
     const payoutSchedule: PayoutSchedule = {
       labelCreatedBps: PAYOUT_DEFAULTS.LABEL_CREATED_BPS,
       shippedBps: PAYOUT_DEFAULTS.SHIPPED_BPS,
+      inTransitBps: PAYOUT_DEFAULTS.IN_TRANSIT_BPS,
       deliveredBps: PAYOUT_DEFAULTS.DELIVERED_BPS,
       finalizedBps: PAYOUT_DEFAULTS.FINALIZED_BPS,
     };

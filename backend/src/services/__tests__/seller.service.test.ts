@@ -6,19 +6,12 @@ import {
   makePayout,
 } from "../../__tests__/helpers/fixtures";
 
-vi.mock("../../db/client", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue([]),
-    offset: vi.fn().mockReturnThis(),
-    orderBy: vi.fn().mockReturnThis(),
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue([]),
-  },
-}));
+vi.mock("../../db/client", () => {
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
+});
 
 import { db } from "../../db/client";
 
@@ -33,7 +26,7 @@ describe("SellerService", () => {
   describe("onboard", () => {
     it("should onboard a seller with default payout config", async () => {
       const seller = makeSeller();
-      (db.returning as any).mockResolvedValueOnce([seller]);
+      (db as any).mockResolvedValueOnce([seller]);
 
       const result = await service.onboard("proj_1", {
         walletAddress: "0xSeller",
@@ -48,7 +41,7 @@ describe("SellerService", () => {
       });
 
       expect(result.id).toBeDefined();
-      expect(db.insert).toHaveBeenCalled();
+      expect(db).toHaveBeenCalled();
     });
 
     it("should throw 400 if payout config does not sum to 10000 bps", async () => {
@@ -66,6 +59,7 @@ describe("SellerService", () => {
           payoutConfig: {
             labelCreatedBps: 1000,
             shippedBps: 1000,
+            inTransitBps: 1000,
             deliveredBps: 1000,
             finalizedBps: 1000,
           },
@@ -75,7 +69,7 @@ describe("SellerService", () => {
 
     it("should accept valid custom payout config", async () => {
       const seller = makeSeller();
-      (db.returning as any).mockResolvedValueOnce([seller]);
+      (db as any).mockResolvedValueOnce([seller]);
 
       const result = await service.onboard("proj_1", {
         walletAddress: "0xSeller",
@@ -89,9 +83,10 @@ describe("SellerService", () => {
         },
         payoutConfig: {
           labelCreatedBps: 2000,
-          shippedBps: 2000,
+          shippedBps: 1500,
+          inTransitBps: 1500,
           deliveredBps: 3000,
-          finalizedBps: 3000,
+          finalizedBps: 2000,
         },
       });
 
@@ -101,7 +96,7 @@ describe("SellerService", () => {
 
   describe("getOrders", () => {
     it("should throw 404 if seller not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
 
       await expect(service.getOrders("fs_sel_none", "proj_1")).rejects.toThrow(
         "Seller not found",
@@ -111,7 +106,7 @@ describe("SellerService", () => {
 
   describe("getMetrics", () => {
     it("should throw 404 if seller not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
 
       await expect(service.getMetrics("fs_sel_none", "proj_1")).rejects.toThrow(
         "Seller not found",
@@ -121,7 +116,7 @@ describe("SellerService", () => {
 
   describe("getPayouts", () => {
     it("should throw 404 if seller not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
 
       await expect(service.getPayouts("fs_sel_none", "proj_1")).rejects.toThrow(
         "Seller not found",

@@ -1,134 +1,156 @@
-import WebSocket from "ws";
 import { env } from "../config/env";
 
 type AgentRole = "buyer" | "seller" | "admin";
 
-const AGENT_URL_MAP: Record<AgentRole, keyof typeof env> = {
-  buyer: "PINATA_BUYER_AGENT_URL",
-  seller: "PINATA_SELLER_AGENT_URL",
-  admin: "PINATA_ADMIN_AGENT_URL",
+const TOOL_MAP: Record<AgentRole, string> = {
+  buyer: "buyer_agent_chat",
+  seller: "seller_agent_chat",
+  admin: "admin_agent_chat",
 };
 
-const AGENT_TOKEN_MAP: Record<AgentRole, keyof typeof env> = {
-  buyer: "PINATA_BUYER_AGENT_TOKEN",
-  seller: "PINATA_SELLER_AGENT_TOKEN",
-  admin: "PINATA_ADMIN_AGENT_TOKEN",
-};
+interface SseSession {
+  sessionId: string;
+  waitForNextMessage: () => Promise<unknown>;
+  close: () => void;
+}
+
+async function openSseSession(baseUrl: string): Promise<SseSession> {
+  return new Promise((resolveSession, rejectSession) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+      controller.abort();
+      rejectSession(new Error("MCP SSE connection timed out"));
+    }, 30_000);
+
+    let resolvePending: ((v: unknown) => void) | null = null;
+    let sessionResolved = false;
+
+    fetch(`${baseUrl}/sse`, {
+      signal: controller.signal,
+      headers: { Accept: "text/event-stream" },
+    })
+      .then(async (res) => {
+        if (!res.body) {
+          clearTimeout(timeout);
+          rejectSession(new Error("No SSE response body from MCP agents"));
+          return;
+        }
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        const pump = async () => {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+
+              buffer += decoder.decode(value, { stream: true });
+              const blocks = buffer.split("\n\n");
+              buffer = blocks.pop() ?? "";
+
+              for (const block of blocks) {
+                const lines = block.split("\n");
+                let eventType = "";
+                let data = "";
+                for (const line of lines) {
+                  if (line.startsWith("event: ")) eventType = line.slice(7).trim();
+                  else if (line.startsWith("data: ")) data = line.slice(6).trim();
+                }
+
+                if (eventType === "endpoint" && !sessionResolved) {
+                  const match = data.match(/sessionId=([^&\s"]+)/);
+                  if (match) {
+                    sessionResolved = true;
+                    clearTimeout(timeout);
+                    resolveSession({
+                      sessionId: match[1],
+                      waitForNextMessage: () =>
+                        new Promise<unknown>((resolve) => {
+                          resolvePending = resolve;
+                        }),
+                      close: () => {
+                        controller.abort();
+                        reader.cancel().catch(() => {});
+                      },
+                    });
+                  }
+                } else if (eventType === "message" && data) {
+                  try {
+                    const parsed = JSON.parse(data);
+                    if (resolvePending) {
+                      const cb = resolvePending;
+                      resolvePending = null;
+                      cb(parsed);
+                    }
+                  } catch {
+                    // ignore non-JSON SSE frames
+                  }
+                }
+              }
+            }
+          } catch (err: any) {
+            if (err?.name !== "AbortError") {
+              console.error("[agent-service] SSE pump error:", err);
+            }
+          }
+        };
+
+        pump();
+      })
+      .catch((err) => {
+        clearTimeout(timeout);
+        rejectSession(err);
+      });
+  });
+}
 
 export class AgentService {
   async chat(
-    projectId: string,
+    _projectId: string,
     role: AgentRole,
     userId: string,
-    message: string
+    message: string,
   ): Promise<{ response: string; role: AgentRole; suggestedActions?: string[] }> {
-    const agentUrl = env[AGENT_URL_MAP[role]] as string | undefined;
-    const agentToken = env[AGENT_TOKEN_MAP[role]] as string | undefined;
+    const baseUrl = env.MCP_AGENTS_URL;
+    const toolName = TOOL_MAP[role];
 
-    if (!agentUrl || !agentToken) {
-      return {
-        response: `Agent not configured. Set PINATA_${role.toUpperCase()}_AGENT_URL and PINATA_${role.toUpperCase()}_AGENT_TOKEN.`,
-        role,
-      };
+    const toolArgs: Record<string, string> = { message };
+    if (role === "buyer") toolArgs.buyer_wallet = userId;
+    else if (role === "seller") toolArgs.seller_id = userId;
+
+    const session = await openSseSession(baseUrl);
+
+    try {
+      // Register listener before sending POST to avoid race
+      const resultPromise = session.waitForNextMessage();
+
+      await fetch(`${baseUrl}/message?sessionId=${session.sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "tools/call",
+          id: Date.now(),
+          params: { name: toolName, arguments: toolArgs },
+        }),
+      });
+
+      const result = await resultPromise;
+      session.close();
+
+      const content = (result as any)?.result?.content;
+      let responseText = "No response from agent.";
+      if (Array.isArray(content)) {
+        const textItem = content.find((c: any) => c.type === "text");
+        if (textItem?.text) responseText = textItem.text;
+      }
+
+      return { response: responseText, role };
+    } catch (err) {
+      session.close();
+      throw err;
     }
-
-    // Convert https:// to wss:// if needed, append token
-    const wsUrl = agentUrl.replace(/^https?:\/\//, "wss://").replace(/\/$/, "");
-    const wsUrlWithToken = `${wsUrl}?token=${agentToken}`;
-
-    return new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrlWithToken, { family: 4, headers: { origin: "https://agents.pinata.cloud" } });
-      let responseText = "";
-      const timeout = setTimeout(() => {
-        ws.terminate();
-        reject(new Error("Agent WebSocket timed out"));
-      }, 30_000);
-
-      ws.on("open", () => {
-        console.log("[agent-ws] connected, awaiting challenge...");
-      });
-
-      ws.on("message", (data) => {
-        const raw = data.toString();
-        console.log("[agent-ws] raw message:", raw);
-        try {
-          const parsed = JSON.parse(raw);
-
-          // Step 1: server sends challenge → respond with connect request
-          if (parsed.type === "event" && parsed.event === "connect.challenge") {
-            const connectReq = JSON.stringify({
-              type: "req",
-              method: "connect",
-              id: `${Date.now()}-connect`,
-              params: {
-                minProtocol: 3,
-                maxProtocol: 3,
-                client: { id: "webchat", displayName: "FlowState", version: "1.0.0", platform: "node", mode: "webchat" },
-                role: "operator",
-                scopes: ["operator.admin", "operator.approvals", "operator.pairing"],
-                caps: [],
-                commands: [],
-                permissions: {},
-                auth: { token: agentToken },
-                locale: "en-US",
-                userAgent: "flowstate-backend/1.0.0",
-              },
-            });
-            console.log("[agent-ws] sending connect:", connectReq);
-            ws.send(connectReq);
-            return;
-          }
-
-          // Step 2: connect accepted → send chat message
-          if (parsed.type === "res" && parsed.ok === true && parsed.id?.endsWith("-connect")) {
-            const idempotencyKey = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-            const sessionKey = `user:${userId}`;
-            const wrappedMessage = `[SYSTEM_CONTEXT: user_id=${userId}, role=${role}]\n\n${message}`;
-            const chatReq = JSON.stringify({
-              type: "req",
-              method: "chat.send",
-              id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-              params: {
-                sessionKey,
-                idempotencyKey,
-                message: wrappedMessage,
-              },
-            });
-            console.log("[agent-ws] sending chat:", chatReq);
-            ws.send(chatReq);
-            return;
-          }
-
-          // Step 3: accumulate streaming response chunks
-          if (parsed.type === "event" && parsed.event === "agent") {
-            const stream = parsed.payload?.stream;
-            const data = parsed.payload?.data;
-
-            if (stream === "lifecycle" && (data?.phase === "end" || data?.phase === "done")) {
-              clearTimeout(timeout);
-              ws.close();
-              resolve({ response: responseText, role });
-              return;
-            }
-
-            if (stream === "assistant" && data?.text) {
-              responseText = data.text; // always the full accumulated text
-            }
-          }
-        } catch {
-          // Non-JSON frame — ignore
-        }
-      });
-
-      ws.on("close", () => {
-        clearTimeout(timeout);
-        resolve({ response: responseText || "No response received from agent.", role });
-      });
-
-      ws.on("error", (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-    });
   }
 }

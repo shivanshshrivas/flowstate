@@ -13,4 +13,7 @@ export const config = {
   SESSION_TTL_MS: 30 * 60 * 1000,           // 30 minutes
   MAX_SESSIONS: 100,
   SESSION_CLEANUP_INTERVAL_MS: 5 * 60 * 1000, // 5 minutes
+  FLOWSTATE_API_URL: process.env.FLOWSTATE_API_URL ?? "http://localhost:3000",
+  FLOWSTATE_API_KEY: process.env.FLOWSTATE_API_KEY ?? "",
+  FLOWSTATE_PROJECT_ID: process.env.FLOWSTATE_PROJECT_ID ?? "",
 } as const;

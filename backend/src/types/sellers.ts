@@ -10,6 +10,7 @@ export interface BusinessAddress {
 export interface PayoutConfig {
   labelCreatedBps: number;
   shippedBps: number;
+  inTransitBps: number;
   deliveredBps: number;
   finalizedBps: number;
 }

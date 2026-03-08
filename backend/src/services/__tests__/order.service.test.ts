@@ -8,19 +8,12 @@ import {
 import { makeOrder, makeSeller } from "../../__tests__/helpers/fixtures";
 
 // Mock the DB module
-vi.mock("../../db/client", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue([]),
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-  },
-}));
+vi.mock("../../db/client", () => {
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
+});
 
 vi.mock("../../events/emitter", () => ({
   flowStateEmitter: {
@@ -65,7 +58,7 @@ describe("OrderService", () => {
   describe("create", () => {
     it("should create an order with shipping rates", async () => {
       const seller = makeSeller({ projectId: "proj_1" });
-      (db.limit as any).mockResolvedValueOnce([seller]);
+      (db as any).mockResolvedValueOnce([seller]);
 
       const result = await service.create("proj_1", {
         items: [{ name: "Widget", quantity: 1, unitPriceUsd: 50 }],
@@ -102,11 +95,11 @@ describe("OrderService", () => {
       expect(result.shippingOptions).toBeDefined();
       expect(result.subtotalUsd).toBe(50);
       expect(shippoBridge.getRates).toHaveBeenCalledOnce();
-      expect(db.insert).toHaveBeenCalled();
+      expect(db).toHaveBeenCalled();
     });
 
     it("should throw 404 if seller not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
 
       await expect(
         service.create("proj_1", {
@@ -146,7 +139,7 @@ describe("OrderService", () => {
   describe("selectShipping", () => {
     it("should purchase label and return escrow amount", async () => {
       const order = makeOrder({ state: "INITIATED", subtotalUsd: "100.00" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.selectShipping(order.id, order.projectId, {
         rateId: "rate_1",
@@ -160,7 +153,7 @@ describe("OrderService", () => {
 
     it("should throw 409 if order not in INITIATED state", async () => {
       const order = makeOrder({ state: "ESCROWED" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(
         service.selectShipping(order.id, order.projectId, { rateId: "rate_1" }),
@@ -168,7 +161,7 @@ describe("OrderService", () => {
     });
 
     it("should throw 404 if order not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
 
       await expect(
         service.selectShipping("fs_ord_none", "proj_1", { rateId: "rate_1" }),
@@ -182,8 +175,8 @@ describe("OrderService", () => {
         state: "INITIATED",
         escrowAmountToken: "200.000000000000000000",
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
-      (db.returning as any).mockResolvedValueOnce([
+      (db as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([
         { ...order, state: "ESCROWED" },
       ]);
 
@@ -203,7 +196,7 @@ describe("OrderService", () => {
 
     it("should throw 400 if shipping not selected (no escrowAmountToken)", async () => {
       const order = makeOrder({ state: "INITIATED", escrowAmountToken: null });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(
         service.confirmEscrow(order.id, order.projectId, { txHash: "0xtx" }),
@@ -215,7 +208,7 @@ describe("OrderService", () => {
         state: "INITIATED",
         escrowAmountToken: "200.000000000000000000",
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
       (blockchainBridge.verifyEscrowDeposit as any).mockResolvedValueOnce({
         verified: false,
         contractOrderId: "",
@@ -228,7 +221,7 @@ describe("OrderService", () => {
 
     it("should throw 409 if order not in INITIATED state", async () => {
       const order = makeOrder({ state: "ESCROWED" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(
         service.confirmEscrow(order.id, order.projectId, { txHash: "0xtx" }),
@@ -244,8 +237,8 @@ describe("OrderService", () => {
         escrowAmountToken: "200.000000000000000000",
         escrowContractOrderId: "contract_ord_1",
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
-      (db.returning as any).mockResolvedValueOnce([
+      (db as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([
         { ...order, state: "LABEL_CREATED" },
       ]);
 
@@ -273,7 +266,7 @@ describe("OrderService", () => {
 
     it("should throw 403 if wallet mismatch", async () => {
       const order = makeOrder({ state: "ESCROWED", sellerWallet: "0xSeller" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(
         service.confirmLabelPrinted(order.id, order.projectId, {
@@ -291,8 +284,8 @@ describe("OrderService", () => {
         escrowContractOrderId: "contract_ord_1",
         graceEndsAt: new Date(Date.now() - 1000),
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
-      (db.returning as any).mockResolvedValueOnce([
+      (db as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([
         { ...order, state: "FINALIZED" },
       ]);
 
@@ -312,7 +305,7 @@ describe("OrderService", () => {
         state: "DELIVERED",
         graceEndsAt: new Date(Date.now() + 60 * 60 * 1000),
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(service.finalize(order.id, order.projectId)).rejects.toThrow(
         "Grace period has not expired",
@@ -321,7 +314,7 @@ describe("OrderService", () => {
 
     it("should throw 409 if order not in DELIVERED state", async () => {
       const order = makeOrder({ state: "SHIPPED" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       await expect(service.finalize(order.id, order.projectId)).rejects.toThrow(
         "Cannot finalize in state SHIPPED",
@@ -332,21 +325,9 @@ describe("OrderService", () => {
   describe("getById", () => {
     it("should return order with items", async () => {
       const order = makeOrder();
-      (db.limit as any).mockResolvedValueOnce([order]);
-      // The items query: db.select().from(orderItems).where(eq(...))
-      // where() is the terminal call here (no limit), so mock it to resolve
-      // We need the second .where() chain to return items
       const items = [{ id: "item_1", name: "Widget" }];
-      let whereCount = 0;
-      (db.where as any).mockImplementation(function (this: any) {
-        whereCount++;
-        // First where call returns this (for the order query chain).
-        // Second where call is the items query terminal - return items.
-        if (whereCount === 2) {
-          return Promise.resolve(items);
-        }
-        return this;
-      });
+      (db as any).mockResolvedValueOnce([order]); // select orders
+      (db as any).mockResolvedValueOnce(items);   // select order_items
 
       const result = await service.getById(order.id, order.projectId);
 
@@ -355,7 +336,7 @@ describe("OrderService", () => {
     });
 
     it("should throw 404 if order not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
 
       await expect(service.getById("fs_ord_none", "proj_1")).rejects.toThrow(
         "Order not found",

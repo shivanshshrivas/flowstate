@@ -1,41 +1,27 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PlatformService } from "../platform.service";
 
-// Use a queue-based approach: terminal methods pop results from a queue.
-const resultQueue: any[] = [];
-
 vi.mock("../../db/client", () => {
-  // Create a Proxy that acts as both a chainable builder and a thenable.
-  // When awaited, it pops the next result from the queue.
-  function createChainableProxy(): any {
-    const handler: ProxyHandler<object> = {
-      get(_target, prop) {
-        if (prop === "then") {
-          // Make it thenable - when awaited, pop from result queue
-          const result = resultQueue.shift() ?? [];
-          return (resolve: any) => resolve(result);
-        }
-        // All other properties return a function that returns the proxy
-        return vi.fn().mockImplementation(() => createChainableProxy());
-      },
-    };
-    return new Proxy({}, handler);
-  }
-  return { db: createChainableProxy() };
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
 });
+
+import { db } from "../../db/client";
 
 describe("PlatformService", () => {
   let service: PlatformService;
 
   beforeEach(() => {
-    resultQueue.length = 0;
+    vi.clearAllMocks();
     service = new PlatformService();
   });
 
   describe("getAnalytics", () => {
     it("should return analytics with order counts and revenue", async () => {
       // Query 1: ordersByState
-      resultQueue.push([
+      (db as any).mockResolvedValueOnce([
         {
           state: "INITIATED",
           count: 5,
@@ -50,9 +36,9 @@ describe("PlatformService", () => {
         },
       ]);
       // Query 2: sellerCounts
-      resultQueue.push([{ total: 10, active: 8 }]);
+      (db as any).mockResolvedValueOnce([{ total: 10, active: 8 }]);
       // Query 3: disputeResult
-      resultQueue.push([{ count: 2 }]);
+      (db as any).mockResolvedValueOnce([{ count: 2 }]);
 
       const result = await service.getAnalytics("proj_1", 30);
 
@@ -64,7 +50,7 @@ describe("PlatformService", () => {
 
   describe("getSellers", () => {
     it("should return sellers with dispute rates", async () => {
-      resultQueue.push([
+      (db as any).mockResolvedValueOnce([
         {
           id: "s1",
           businessName: "Shop A",
@@ -92,7 +78,7 @@ describe("PlatformService", () => {
     });
 
     it("should filter flagged sellers (>5% dispute rate)", async () => {
-      resultQueue.push([
+      (db as any).mockResolvedValueOnce([
         {
           id: "s1",
           businessName: "Good Shop",
@@ -122,7 +108,7 @@ describe("PlatformService", () => {
 
   describe("getGasCosts", () => {
     it("should return gas cost estimates", async () => {
-      resultQueue.push([
+      (db as any).mockResolvedValueOnce([
         { state: "LABEL_CREATED", count: 10 },
         { state: "SHIPPED", count: 8 },
       ]);

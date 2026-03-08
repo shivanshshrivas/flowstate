@@ -7,16 +7,12 @@ import {
 } from "../../__tests__/helpers/mocks";
 import { makeOrder } from "../../__tests__/helpers/fixtures";
 
-vi.mock("../../db/client", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-  },
-}));
+vi.mock("../../db/client", () => {
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
+});
 
 vi.mock("../../events/emitter", () => ({
   flowStateEmitter: {
@@ -91,7 +87,7 @@ describe("ShippingService", () => {
   describe("getTracking", () => {
     it("should return tracking info for valid order", async () => {
       const order = makeOrder({ carrier: "usps", trackingNumber: "TRACK123" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.getTracking(order.id);
 
@@ -103,7 +99,7 @@ describe("ShippingService", () => {
     });
 
     it("should throw 404 if order not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
       await expect(service.getTracking("fs_ord_none")).rejects.toThrow(
         "Order not found",
       );
@@ -111,7 +107,7 @@ describe("ShippingService", () => {
 
     it("should throw 400 if no tracking info", async () => {
       const order = makeOrder({ carrier: null, trackingNumber: null });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
       await expect(service.getTracking(order.id)).rejects.toThrow(
         "No tracking information",
       );
@@ -135,7 +131,7 @@ describe("ShippingService", () => {
         escrowAmountToken: "200.000000000000000000",
         escrowContractOrderId: "contract_ord_1",
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.processWebhook({ event: "track_updated" });
 
@@ -153,7 +149,34 @@ describe("ShippingService", () => {
       );
     });
 
-    it("should process DELIVERED event and set grace period", async () => {
+    it("should process IN_TRANSIT event and release 20%", async () => {
+      (shippoBridge.handleWebhook as any).mockResolvedValueOnce({
+        handled: true,
+        trackingNumber: "TRACK123",
+        carrier: "usps",
+        status: "TRANSIT",
+        escrowEvent: "IN_TRANSIT",
+        shouldAdvance: true,
+      });
+
+      const order = makeOrder({
+        state: "SHIPPED",
+        trackingNumber: "TRACK123",
+        escrowAmountToken: "200.000000000000000000",
+        escrowContractOrderId: "contract_ord_1",
+      });
+      (db as any).mockResolvedValueOnce([order]);
+
+      const result = await service.processWebhook({ event: "track_updated" });
+
+      expect(result.handled).toBe(true);
+      expect(blockchainBridge.releasePartial).toHaveBeenCalledWith(
+        "contract_ord_1",
+        2000,
+      );
+    });
+
+    it("should process DELIVERED event from IN_TRANSIT and set grace period", async () => {
       (shippoBridge.handleWebhook as any).mockResolvedValueOnce({
         handled: true,
         trackingNumber: "TRACK123",
@@ -164,12 +187,12 @@ describe("ShippingService", () => {
       });
 
       const order = makeOrder({
-        state: "SHIPPED",
+        state: "IN_TRANSIT",
         trackingNumber: "TRACK123",
         escrowAmountToken: "200.000000000000000000",
         escrowContractOrderId: "contract_ord_1",
       });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       const result = await service.processWebhook({ event: "track_updated" });
 
@@ -198,7 +221,7 @@ describe("ShippingService", () => {
         escrowEvent: "SHIPPED",
         shouldAdvance: true,
       });
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
 
       const result = await service.processWebhook({ event: "track_updated" });
 
