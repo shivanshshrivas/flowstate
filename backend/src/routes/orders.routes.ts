@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authPreHandler } from "../middleware/auth";
+import { callerIdentityPreHandler } from "../middleware/caller-identity";
+import { buyerOrderOwnershipPreHandler } from "../middleware/ownership";
 import type { OrderService } from "../services/order.service";
 
 const createOrderSchema = z.object({
@@ -222,7 +224,7 @@ export function ordersRoutes(orderService: OrderService) {
     // GET /orders/:id
     fastify.get(
       "/:id",
-      { preHandler: authPreHandler },
+      { preHandler: [authPreHandler, callerIdentityPreHandler, buyerOrderOwnershipPreHandler] },
       async (request, reply) => {
         const { id } = request.params as { id: string };
         const { order, items } = await orderService.getById(id, request.projectId);

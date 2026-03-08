@@ -20,6 +20,8 @@ async function run({ buyer_wallet, status }) {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
+      'X-Caller-User-Id': buyer_wallet,
+      'X-Caller-Role': 'buyer',
       'Content-Type': 'application/json',
     },
   });

@@ -1,0 +1,16 @@
+{
+  "name": "pinata-agents",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:skills": "npx tsx test/skill-isolation.test.ts",
+    "test:service": "npx tsx test/agent-service.test.ts",
+    "test:prompts": "npx tsx test/prompt-injection.test.ts",
+    "test": "npx tsx test/skill-isolation.test.ts && npx tsx test/agent-service.test.ts && npx tsx test/prompt-injection.test.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

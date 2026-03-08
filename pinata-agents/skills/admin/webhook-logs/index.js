@@ -16,6 +16,7 @@ async function run({ status, limit }) {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
+      'X-Caller-Role': 'admin',
       'Content-Type': 'application/json',
     },
   });

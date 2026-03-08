@@ -19,6 +19,8 @@ async function run({ seller_id, period }) {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
+      'X-Caller-User-Id': seller_id,
+      'X-Caller-Role': 'seller',
       'Content-Type': 'application/json',
     },
   });
