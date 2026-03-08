@@ -47,10 +47,15 @@ export class PayoutService {
 
     const payout = rows[0];
 
+    const [orderRow] = await db<{ projectId: string }[]>`
+      select project_id from orders where id = ${input.orderId} limit 1
+    `;
+
     flowStateEmitter.emit("payout:recorded", {
       payoutId: payout.id,
       orderId: payout.orderId,
       sellerId: payout.sellerId,
+      projectId: orderRow?.projectId,
       state: payout.state,
       amountToken: payout.amountToken,
       txHash: payout.txHash ?? undefined,

@@ -1,4 +1,4 @@
-const { shippo } = require("./client");
+const { getClient } = require("./client");
 
 /**
  * Escrow state machine states (mirrors EscrowStateMachine.sol):
@@ -67,6 +67,7 @@ function mapToEscrowEvent(status, substatus) {
  * @returns {object} Shippo tracking status object
  */
 async function getTrackingStatus(carrier, trackingNumber) {
+  const shippo = getClient();
   const tracking = await shippo.trackingStatus.get(carrier, trackingNumber);
 
   return {

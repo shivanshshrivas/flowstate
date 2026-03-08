@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from "crypto";
+import { createHash, createHmac, timingSafeEqual, randomBytes } from "crypto";
 
 /**
  * Hash an API key with SHA-256 for storage.
@@ -33,5 +33,5 @@ export function verifyWebhookSignature(
  * Generate a random webhook secret (hex string).
  */
 export function generateWebhookSecret(): string {
-  return createHash("sha256").update(Math.random().toString()).digest("hex");
+  return `whsec_${randomBytes(32).toString("hex")}`;
 }

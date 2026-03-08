@@ -1,4 +1,4 @@
-const { shippo } = require("./client");
+const { getClient } = require("./client");
 
 /**
  * Purchases a shipping label for the selected rate.
@@ -13,6 +13,7 @@ const { shippo } = require("./client");
  * @returns {object} label info including tracking number and PDF URL
  */
 async function purchaseLabel(rateObjectId) {
+  const shippo = getClient();
   const transaction = await shippo.transactions.create({
     rate: rateObjectId,
     labelFileType: "PDF",
@@ -31,6 +32,7 @@ async function purchaseLabel(rateObjectId) {
     carrier: transaction.rate?.provider ?? "unknown",
     labelUrl: transaction.labelUrl,   // PDF download URL from Shippo
     labelIpfsCid: null,               // filled in by pinLabelToIPFS()
+    shippingCostUsd: transaction.rate?.amount ?? "0",
   };
 
   // Pin the label PDF to Pinata IPFS.

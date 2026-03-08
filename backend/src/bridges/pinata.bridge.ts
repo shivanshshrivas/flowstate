@@ -1,8 +1,8 @@
-/**
- * IPinataBridge — interface for IPFS pinning via Pinata.
- * Stub implementation returns deterministic mock CIDs.
- * Replace with real Pinata SDK when available.
- */
+import * as pinataLib from "../../../pinata/src";
+
+import { env } from "../config/env";
+
+// ─── Interface ────────────────────────────────────────────────────────────────
 
 export interface IPinataBridge {
   pinJSON(data: unknown, name: string): Promise<string>;
@@ -10,7 +10,32 @@ export interface IPinataBridge {
   getGatewayUrl(cid: string): string;
 }
 
-// ─── Stub implementation ──────────────────────────────────────────────────────
+// ─── Real implementation ──────────────────────────────────────────────────────
+
+export class PinataBridgeImpl implements IPinataBridge {
+  constructor(jwt?: string, gateway?: string) {
+    const resolvedJwt = jwt ?? env.PINATA_JWT;
+    const resolvedGateway = gateway ?? env.PINATA_GATEWAY;
+    if (resolvedJwt && resolvedGateway) {
+      pinataLib.initialize(resolvedJwt, resolvedGateway);
+    }
+    // If neither is provided, pinata module falls back to its own .env on first use
+  }
+
+  async pinJSON(data: unknown, name: string): Promise<string> {
+    return pinataLib.pinGenericJSON(data, name);
+  }
+
+  async pinFile(fileUrl: string, name: string): Promise<string> {
+    return pinataLib.pinGenericFile(fileUrl, name);
+  }
+
+  getGatewayUrl(cid: string): string {
+    return pinataLib.getGatewayUrl(cid);
+  }
+}
+
+// ─── Stub (kept for test environments without Pinata credentials) ─────────────
 
 export class PinataBridgeStub implements IPinataBridge {
   private gatewayBase = "https://gateway.pinata.cloud/ipfs";

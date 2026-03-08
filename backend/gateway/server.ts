@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import type { WebhookEnvelope } from "./types/webhooks";
 
 export interface FlowStateServerConfig {
   apiKey?: string;
@@ -22,13 +23,13 @@ export class FlowStateServer {
     this.webhookSecret = config?.webhookSecret ?? "";
   }
 
-  verifyAndParse(rawBody: string, signature: string | null): Record<string, unknown> {
+  verifyAndParse<T = Record<string, unknown>>(rawBody: string, signature: string | null): WebhookEnvelope<T> {
     if (!this.verifySignature(rawBody, signature)) {
       throw new Error("Invalid webhook signature");
     }
 
     try {
-      return JSON.parse(rawBody) as Record<string, unknown>;
+      return JSON.parse(rawBody) as WebhookEnvelope<T>;
     } catch {
       throw new Error("Invalid webhook payload");
     }

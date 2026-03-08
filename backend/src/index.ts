@@ -6,7 +6,7 @@ import { registerRoutes } from "./routes";
 
 // Bridges
 import { ShippoBridgeImpl } from "./bridges/shippo.bridge";
-import { PinataBridgeStub } from "./bridges/pinata.bridge";
+import { PinataBridgeImpl } from "./bridges/pinata.bridge";
 import { BlockchainBridgeStub } from "./bridges/blockchain.bridge";
 
 // Services
@@ -39,7 +39,7 @@ import { startCronJobs, startCronFallback } from "./cron/scheduler";
 async function bootstrap() {
   // ─── Bridge instances ───────────────────────────────────────────────────────
   const shippoBridge = new ShippoBridgeImpl();
-  const pinataBridge = new PinataBridgeStub();
+  const pinataBridge = new PinataBridgeImpl();
   const blockchainBridge = new BlockchainBridgeStub();
 
   // ─── Service instances ──────────────────────────────────────────────────────
@@ -144,10 +144,18 @@ async function bootstrap() {
     await dispatchWebhook(event.projectId, "dispute.resolved", data);
   });
 
-  flowStateEmitter.on("payout:recorded", async (_event) => {
-    // payout:recorded events don't carry projectId, so webhook dispatch
-    // requires a DB lookup. For now, this is wired but skips dispatch.
-    // WebSocket broadcast is also skipped since we need projectId.
+  flowStateEmitter.on("payout:recorded", async (event) => {
+    if (!event.projectId) return;
+    const data = {
+      payout_id: event.payoutId,
+      order_id: event.orderId,
+      seller_id: event.sellerId,
+      state: event.state,
+      amount_token: event.amountToken,
+      tx_hash: event.txHash,
+    };
+    await dispatchWebhook(event.projectId, "payout.released", data);
+    broadcastToProject(event.projectId, "payout_released", data);
   });
 
   // ─── Fastify app ────────────────────────────────────────────────────────────

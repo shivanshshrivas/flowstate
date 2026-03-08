@@ -13,6 +13,8 @@ const envSchema = z.object({
   PLATFORM_FEE_BPS: z.coerce.number().default(250),
   GRACE_PERIOD_HOURS: z.coerce.number().default(48),
   REDIS_URL: z.string().optional(),
+  PINATA_JWT: z.string().optional(),
+  PINATA_GATEWAY: z.string().optional(),
   PINATA_BUYER_AGENT_URL: z.string().optional(),
   PINATA_SELLER_AGENT_URL: z.string().optional(),
   PINATA_ADMIN_AGENT_URL: z.string().optional(),

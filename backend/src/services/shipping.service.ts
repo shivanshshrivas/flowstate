@@ -190,7 +190,7 @@ export class ShippingService {
           timestamp: now,
         });
 
-        await this.webhookService.dispatch(order.projectId, "order.status_updated", {
+        await this.webhookService.enqueueDispatch(order.projectId, "order.status_updated", {
           orderId: order.id,
           state: newState,
           trackingNumber: result.trackingNumber,

@@ -1,4 +1,4 @@
-const { shippo } = require("./client");
+const { getClient } = require("./client");
 
 /**
  * Fetches shipping rates for a given shipment.
@@ -12,6 +12,7 @@ const { shippo } = require("./client");
  * @returns {object} shipment  - Full Shippo shipment object; .rates[] has the options
  */
 async function getShippingRates(fromAddress, toAddress, parcel) {
+  const shippo = getClient();
   const shipment = await shippo.shipments.create({
     addressFrom: fromAddress,
     addressTo: toAddress,

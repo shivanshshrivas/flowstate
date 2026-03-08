@@ -1,5 +1,5 @@
 const fetch = require("node-fetch");
-const { pinata, gatewayUrl } = require("./client");
+const { getClient, gatewayUrl } = require("./client");
 
 /**
  * Fetches a shipping label PDF from Shippo and pins it to IPFS.
@@ -21,6 +21,7 @@ const { pinata, gatewayUrl } = require("./client");
  * @returns {{ cid, url }}
  */
 async function pinShippingLabel(labelUrl, orderId, trackingNumber) {
+  const pinata = getClient();
   const response = await fetch(labelUrl);
 
   if (!response.ok) {

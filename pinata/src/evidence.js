@@ -1,4 +1,4 @@
-const { pinata, gatewayUrl } = require("./client");
+const { getClient, gatewayUrl } = require("./client");
 
 /**
  * Pins dispute evidence to IPFS.
@@ -25,6 +25,7 @@ const { pinata, gatewayUrl } = require("./client");
  * @returns {{ cid, url, filename }}
  */
 async function pinEvidenceFile(fileBuffer, filename, mimeType, disputeId) {
+  const pinata = getClient();
   const file = new File([fileBuffer], filename, { type: mimeType });
 
   const result = await pinata.upload
@@ -51,6 +52,7 @@ async function pinEvidenceFile(fileBuffer, filename, mimeType, disputeId) {
  * @returns {{ cid, url, bundle }}
  */
 async function pinEvidenceBundle({ disputeId, orderId, submittedBy, description, attachments }) {
+  const pinata = getClient();
   const bundle = {
     bundleVersion: "1.0",
     disputeId,
