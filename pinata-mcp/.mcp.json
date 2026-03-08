@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "pinata": {
+      "command": "npx",
+      "args": [
+        "pinata-mcp"
+      ],
+      "env": {
+        "PINATA_JWT": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiI1MzZjZGE4Ni1kMWFmLTRmZmEtOTQzOS1kMTYyNTNjY2FiNTgiLCJlbWFpbCI6ImJldHRyLmphc0BnbWFpbC5jb20iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicGluX3BvbGljeSI6eyJyZWdpb25zIjpbeyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJGUkExIn0seyJkZXNpcmVkUmVwbGljYXRpb25Db3VudCI6MSwiaWQiOiJOWUMxIn1dLCJ2ZXJzaW9uIjoxfSwibWZhX2VuYWJsZWQiOmZhbHNlLCJzdGF0dXMiOiJBQ1RJVkUifSwiYXV0aGVudGljYXRpb25UeXBlIjoic2NvcGVkS2V5Iiwic2NvcGVkS2V5S2V5IjoiOTM1ZGU0M2RjMGQyMzM1N2QyY2EiLCJzY29wZWRLZXlTZWNyZXQiOiJkN2EwMWVkMDZjMWU3ZGUyYmY4ZTI2YTU1NDFjMmIzMjJmY2MyOWUzZDQ2ZjFmMWViODdkY2UxN2IxMDg4MDU5IiwiZXhwIjoxODA0NDU2ODc4fQ.deqNz4vd2IPS0-GldkXb1LvbMYwXmeuM963mQ_2ic70",
+        "GATEWAY_URL": "purple-personal-tahr-771.mypinata.cloud"
+      }
+    }
+  }
+}
