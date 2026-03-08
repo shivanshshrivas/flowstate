@@ -100,20 +100,22 @@ function CartContent() {
               </div>
               <p className="text-xs text-neutral-500">Shipping calculated at checkout.</p>
               <p className="text-xs text-neutral-500">Payment is escrowed via FlowState smart contract.</p>
-              {isConnected ? (
-                <Link href="/checkout">
-                  <Button className="w-full">Proceed to Checkout</Button>
+              <div className="space-y-3 pt-1">
+                {isConnected ? (
+                  <Link href="/checkout" className="block">
+                    <Button className="w-full">Continue to Checkout</Button>
+                  </Link>
+                ) : (
+                  <Button className="w-full" disabled title="Connect your wallet to checkout">
+                    Connect Wallet to Checkout
+                  </Button>
+                )}
+                <Link href="/" className="block">
+                  <Button className="w-full" variant="outline">
+                    Continue Shopping
+                  </Button>
                 </Link>
-              ) : (
-                <Button className="w-full" disabled title="Connect your wallet to checkout">
-                  Connect Wallet to Checkout
-                </Button>
-              )}
-              <Link href="/">
-                <Button className="w-full" variant="outline">
-                  Continue Shopping
-                </Button>
-              </Link>
+              </div>
             </CardContent>
           </Card>
         </div>

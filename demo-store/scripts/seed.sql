@@ -65,6 +65,100 @@ CREATE TABLE IF NOT EXISTS public.webhook_events (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Shipping options used during checkout
+CREATE TABLE IF NOT EXISTS public.shipping_options (
+  id             TEXT PRIMARY KEY,
+  carrier        TEXT NOT NULL,
+  service        TEXT NOT NULL,
+  price_usd      NUMERIC(10, 2) NOT NULL,
+  estimated_days INTEGER NOT NULL,
+  logo           TEXT,
+  active         BOOLEAN NOT NULL DEFAULT true,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Orders (buyer/seller/admin views)
+CREATE TABLE IF NOT EXISTS public.orders (
+  id              TEXT PRIMARY KEY,
+  buyer_user_id   UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  buyer_wallet    TEXT NOT NULL,
+  seller_id       TEXT NOT NULL REFERENCES public.sellers(id) ON DELETE RESTRICT,
+  seller_name     TEXT,
+  state           TEXT NOT NULL
+                  CHECK (state IN (
+                    'INITIATED', 'ESCROWED', 'LABEL_CREATED', 'SHIPPED',
+                    'IN_TRANSIT', 'DELIVERED', 'FINALIZED', 'DISPUTED'
+                  )),
+  total_usd       NUMERIC(10, 2) NOT NULL DEFAULT 0,
+  total_token     TEXT NOT NULL DEFAULT '0',
+  shipping_option JSONB,
+  shipping_address JSONB,
+  escrow          JSONB,
+  tracking_number TEXT,
+  carrier         TEXT,
+  label_url       TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_buyer_user_id ON public.orders(buyer_user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_seller_id ON public.orders(seller_id);
+CREATE INDEX IF NOT EXISTS idx_orders_state ON public.orders(state);
+CREATE INDEX IF NOT EXISTS idx_orders_created_at ON public.orders(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS public.order_items (
+  order_id       TEXT NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  product_id     TEXT NOT NULL,
+  product_name   TEXT NOT NULL,
+  quantity       INTEGER NOT NULL CHECK (quantity > 0),
+  price_usd      NUMERIC(10, 2) NOT NULL,
+  image_url      TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (order_id, product_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.order_state_history (
+  id            BIGSERIAL PRIMARY KEY,
+  order_id      TEXT NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  from_state    TEXT NOT NULL
+                CHECK (from_state IN (
+                  'INITIATED', 'ESCROWED', 'LABEL_CREATED', 'SHIPPED',
+                  'IN_TRANSIT', 'DELIVERED', 'FINALIZED', 'DISPUTED'
+                )),
+  to_state      TEXT NOT NULL
+                CHECK (to_state IN (
+                  'INITIATED', 'ESCROWED', 'LABEL_CREATED', 'SHIPPED',
+                  'IN_TRANSIT', 'DELIVERED', 'FINALIZED', 'DISPUTED'
+                )),
+  timestamp     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  tx_hash       TEXT,
+  triggered_by  TEXT NOT NULL
+                CHECK (triggered_by IN ('buyer', 'seller', 'system', 'oracle')),
+  notes         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_state_history_order_id
+  ON public.order_state_history(order_id, timestamp);
+
+CREATE TABLE IF NOT EXISTS public.order_payout_schedule (
+  id             BIGSERIAL PRIMARY KEY,
+  order_id       TEXT NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  state          TEXT NOT NULL
+                 CHECK (state IN (
+                   'INITIATED', 'ESCROWED', 'LABEL_CREATED', 'SHIPPED',
+                   'IN_TRANSIT', 'DELIVERED', 'FINALIZED', 'DISPUTED'
+                 )),
+  percentage_bps INTEGER NOT NULL CHECK (percentage_bps >= 0 AND percentage_bps <= 10000),
+  label          TEXT NOT NULL,
+  released_at    TIMESTAMPTZ,
+  tx_hash        TEXT,
+  amount_token   TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_payout_schedule_order_id
+  ON public.order_payout_schedule(order_id);
+
 -- ─── Trigger: auto-create users row on auth signup ────────────────────────
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
@@ -98,8 +192,13 @@ $$;
 ALTER TABLE public.users          ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sellers        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shipping_options ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.platform_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.webhook_events  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_items     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_state_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_payout_schedule ENABLE ROW LEVEL SECURITY;
 
 -- users: read/update own row; admin reads all
 CREATE POLICY "users_select_own"
@@ -126,6 +225,9 @@ CREATE POLICY "sellers_update_own"
 CREATE POLICY "products_select_all"
   ON public.products FOR SELECT USING (true);
 
+CREATE POLICY "shipping_options_select_all"
+  ON public.shipping_options FOR SELECT USING (active = true);
+
 CREATE POLICY "products_insert_own"
   ON public.products FOR INSERT
   WITH CHECK (
@@ -149,6 +251,143 @@ CREATE POLICY "webhook_events_admin"
   ON public.webhook_events FOR ALL
   USING (public.current_user_role() = 'admin');
 
+-- orders: buyer own, seller own, admin all
+CREATE POLICY "orders_select_role_based"
+  ON public.orders FOR SELECT
+  USING (
+    buyer_user_id = auth.uid()
+    OR seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+    OR public.current_user_role() = 'admin'
+  );
+
+CREATE POLICY "orders_insert_role_based"
+  ON public.orders FOR INSERT
+  WITH CHECK (
+    buyer_user_id = auth.uid()
+    OR public.current_user_role() = 'admin'
+  );
+
+CREATE POLICY "orders_update_role_based"
+  ON public.orders FOR UPDATE
+  USING (
+    buyer_user_id = auth.uid()
+    OR seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+    OR public.current_user_role() = 'admin'
+  );
+
+-- order child tables follow order access
+CREATE POLICY "order_items_select_role_based"
+  ON public.order_items FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_items.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
+CREATE POLICY "order_items_insert_role_based"
+  ON public.order_items FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_items.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
+CREATE POLICY "order_items_update_role_based"
+  ON public.order_items FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_items.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
+CREATE POLICY "order_state_history_select_role_based"
+  ON public.order_state_history FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_state_history.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
+CREATE POLICY "order_state_history_insert_role_based"
+  ON public.order_state_history FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_state_history.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
+CREATE POLICY "order_payout_schedule_select_role_based"
+  ON public.order_payout_schedule FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_payout_schedule.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
+CREATE POLICY "order_payout_schedule_insert_role_based"
+  ON public.order_payout_schedule FOR INSERT
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_payout_schedule.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
+CREATE POLICY "order_payout_schedule_update_role_based"
+  ON public.order_payout_schedule FOR UPDATE
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.orders o
+      WHERE o.id = order_payout_schedule.order_id
+      AND (
+        o.buyer_user_id = auth.uid()
+        OR o.seller_id IN (SELECT id FROM public.sellers WHERE user_id = auth.uid())
+        OR public.current_user_role() = 'admin'
+      )
+    )
+  );
+
 -- ─── Seed: Sellers ────────────────────────────────────────────────────────
 INSERT INTO public.sellers (id, business_name, wallet_address, email, address, payout_config, status)
 VALUES
@@ -170,6 +409,16 @@ VALUES
     '{"immediate_bps": 3000, "milestone_bps": 5500, "holdback_bps": 1500}',
     'active'
   )
+ON CONFLICT (id) DO NOTHING;
+
+-- Seed: Shipping Options
+INSERT INTO public.shipping_options (id, carrier, service, price_usd, estimated_days, logo, active)
+VALUES
+  ('ship-usps-ground', 'USPS', 'Ground Advantage', 5.99, 5, NULL, true),
+  ('ship-usps-priority', 'USPS', 'Priority Mail', 9.99, 3, NULL, true),
+  ('ship-ups-ground', 'UPS', 'Ground', 8.49, 4, NULL, true),
+  ('ship-ups-3day', 'UPS', '3-Day Select', 18.99, 3, NULL, true),
+  ('ship-fedex-express', 'FedEx', 'Express Saver', 24.99, 2, NULL, true)
 ON CONFLICT (id) DO NOTHING;
 
 -- ─── Seed: Products ───────────────────────────────────────────────────────

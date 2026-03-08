@@ -1,8 +1,10 @@
 import { ShoppingBag, Truck, RotateCcw } from "lucide-react";
 import { ProductGrid } from "@/components/products/ProductGrid";
-import { MOCK_PRODUCTS } from "@/lib/mock-data";
+import { getProductsFromDatabase } from "@/lib/platform-data";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const products = await getProductsFromDatabase();
+
   return (
     <div>
       {/* Hero */}
@@ -36,10 +38,10 @@ export default function HomePage() {
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-neutral-100">Products</h2>
           <span className="text-sm text-neutral-500">
-            {MOCK_PRODUCTS.length} items
+            {products.length} items
           </span>
         </div>
-        <ProductGrid products={MOCK_PRODUCTS} />
+        <ProductGrid products={products} />
       </section>
     </div>
   );

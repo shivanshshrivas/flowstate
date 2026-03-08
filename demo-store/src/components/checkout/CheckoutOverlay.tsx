@@ -15,8 +15,6 @@ import {
   type Product,
   type ShippingOption,
   type ShippingAddress,
-  OrderState,
-  type Order,
 } from "@/lib/flowstate/types";
 import {
   Dialog,
@@ -30,7 +28,6 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { ShippingSelector } from "./ShippingSelector";
 import { formatUsd, formatToken } from "@/lib/utils";
-import { useOrderStore } from "@/stores/order-store";
 
 type Step = "shipping-address" | "shipping-option" | "confirm" | "processing" | "success";
 
@@ -40,14 +37,9 @@ interface CheckoutOverlayProps {
   product: Product;
 }
 
-function generateOrderId() {
-  return `order-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
 export function CheckoutOverlay({ open, onClose, product }: CheckoutOverlayProps) {
   const router = useRouter();
   const { address } = useAccount();
-  const addOrder = useOrderStore((s) => s.addOrder);
 
   const [step, setStep] = useState<Step>("shipping-address");
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
@@ -85,59 +77,39 @@ export function CheckoutOverlay({ open, onClose, product }: CheckoutOverlayProps
       // Simulate contract call delay (replace with actual wagmi writeContract when deployed)
       await new Promise((r) => setTimeout(r, 2000));
 
-      const orderId = generateOrderId();
-      const now = new Date().toISOString();
-      const mockOrder: Order = {
-        id: orderId,
-        buyer_wallet: address ?? "0x0000",
-        seller_id: product.seller_id,
-        seller_name: product.seller_name,
-        items: [
-          {
-            product_id: product.id,
-            product_name: product.name,
-            quantity: 1,
-            price_usd: product.price_usd,
-            image_url: product.image_url,
-          },
-        ],
-        state: OrderState.ESCROWED,
-        total_usd: total,
-        total_token: totalToken,
-        shipping_option: shippingOption!,
-        shipping_address: shippingAddress,
-        escrow: {
-          escrowId: `escrow-${orderId}`,
-          contractAddress: process.env.NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS ?? "0x0",
-          tokenAddress: process.env.NEXT_PUBLIC_MOCK_RLUSD_ADDRESS ?? "0x0",
-          totalAmount: totalToken,
-          remainingAmount: totalToken,
-          txHash: `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("")}`,
-          blockNumber: 12345678,
-          createdAt: now,
-        },
-        payout_schedule: [
-          { state: OrderState.LABEL_CREATED, percentageBps: 1500, label: "Label Printed (15%)" },
-          { state: OrderState.SHIPPED, percentageBps: 1500, label: "Shipped (15%)" },
-          { state: OrderState.IN_TRANSIT, percentageBps: 2000, label: "In Transit (20%)" },
-          { state: OrderState.DELIVERED, percentageBps: 3500, label: "Delivered (35%)" },
-          { state: OrderState.FINALIZED, percentageBps: 1500, label: "Finalized (15%)" },
-        ],
-        created_at: now,
-        updated_at: now,
-        state_history: [
-          {
-            from: OrderState.INITIATED,
-            to: OrderState.ESCROWED,
-            timestamp: now,
-            txHash: `0x${Math.random().toString(16).slice(2)}`,
-            triggeredBy: "buyer",
-          },
-        ],
-      };
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          buyer_wallet: address ?? "0x0000",
+          seller_id: product.seller_id,
+          seller_name: product.seller_name,
+          items: [
+            {
+              product_id: product.id,
+              product_name: product.name,
+              quantity: 1,
+              price_usd: product.price_usd,
+              image_url: product.image_url,
+            },
+          ],
+          total_usd: total,
+          total_token: totalToken,
+          shipping_option: shippingOption!,
+          shipping_address: shippingAddress,
+        }),
+      });
 
-      addOrder(mockOrder);
-      setCreatedOrderId(orderId);
+      if (!response.ok) {
+        throw new Error("Order creation failed");
+      }
+
+      const payload = (await response.json()) as { order?: { id: string } };
+      if (!payload.order?.id) {
+        throw new Error("Order creation failed");
+      }
+
+      setCreatedOrderId(payload.order.id);
       setStep("success");
     } catch {
       setError("Transaction failed. Please try again.");

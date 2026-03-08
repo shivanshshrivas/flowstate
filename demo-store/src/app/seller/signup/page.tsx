@@ -8,7 +8,13 @@ import { CheckCircle, Loader2, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 
 export default function SellerSignupPage() {
@@ -16,6 +22,7 @@ export default function SellerSignupPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     business_name: "",
     email: "",
@@ -23,25 +30,54 @@ export default function SellerSignupPage() {
     city: "",
     state: "",
     zip: "",
-    // Payout config (basis points)
     immediate_bps: 3000,
     milestone_bps: 5500,
     holdback_bps: 1500,
   });
 
-  const payoutTotal = formData.immediate_bps + formData.milestone_bps + formData.holdback_bps;
+  const payoutTotal =
+    formData.immediate_bps + formData.milestone_bps + formData.holdback_bps;
   const payoutValid = payoutTotal === 10000;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!payoutValid) return;
+    if (!payoutValid || !address) return;
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      // TODO: POST /api/sellers when backend ready
-      await new Promise((r) => setTimeout(r, 1500));
+      const response = await fetch("/api/sellers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          business_name: formData.business_name,
+          email: formData.email,
+          wallet_address: address,
+          address: {
+            name: formData.business_name,
+            address1: formData.address1,
+            city: formData.city,
+            state: formData.state,
+            zip: formData.zip,
+            country: "US",
+          },
+          payout_config: {
+            immediate_bps: formData.immediate_bps,
+            milestone_bps: formData.milestone_bps,
+            holdback_bps: formData.holdback_bps,
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error ?? "Failed to create seller profile");
+      }
+
       setSuccess(true);
-      setTimeout(() => router.push("/seller"), 2000);
+      setTimeout(() => router.push("/seller"), 1500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create seller profile");
     } finally {
       setIsSubmitting(false);
     }
@@ -51,7 +87,10 @@ export default function SellerSignupPage() {
     return {
       value: formData[key],
       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
-        setFormData((f) => ({ ...f, [key]: key.endsWith("_bps") ? Number(e.target.value) : e.target.value })),
+        setFormData((current) => ({
+          ...current,
+          [key]: key.endsWith("_bps") ? Number(e.target.value) : e.target.value,
+        })),
     };
   }
 
@@ -60,7 +99,9 @@ export default function SellerSignupPage() {
       <div className="mx-auto max-w-lg px-4 py-16 text-center">
         <CheckCircle className="h-16 w-16 text-emerald-400 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-neutral-100">Welcome aboard!</h2>
-        <p className="text-neutral-400 mt-2">Your seller account has been created. Redirecting…</p>
+        <p className="text-neutral-400 mt-2">
+          Your seller account has been created. Redirecting...
+        </p>
       </div>
     );
   }
@@ -86,7 +127,6 @@ export default function SellerSignupPage() {
         </Card>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Business info */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Business Information</CardTitle>
@@ -107,7 +147,6 @@ export default function SellerSignupPage() {
             </CardContent>
           </Card>
 
-          {/* Address */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Ship-from Address</CardTitle>
@@ -134,19 +173,31 @@ export default function SellerSignupPage() {
             </CardContent>
           </Card>
 
-          {/* Payout config */}
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Payout Configuration</CardTitle>
               <CardDescription>
-                Configure how your escrow payouts are split across order milestones. Must sum to 100%.
+                Configure how your escrow payouts are split across order milestones. Must sum to
+                100%.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {[
-                { key: "immediate_bps" as const, label: "Immediate (Label Printed)", desc: "Released when you print the shipping label" },
-                { key: "milestone_bps" as const, label: "Milestone (Shipped → Delivered)", desc: "Released incrementally through shipping states" },
-                { key: "holdback_bps" as const, label: "Holdback (Finalized)", desc: "Released after 7-day grace period post-delivery" },
+                {
+                  key: "immediate_bps" as const,
+                  label: "Immediate (Label Printed)",
+                  desc: "Released when you print the shipping label",
+                },
+                {
+                  key: "milestone_bps" as const,
+                  label: "Milestone (Shipped -> Delivered)",
+                  desc: "Released incrementally through shipping states",
+                },
+                {
+                  key: "holdback_bps" as const,
+                  label: "Holdback (Finalized)",
+                  desc: "Released after 7-day grace period post-delivery",
+                },
               ].map(({ key, label, desc }) => (
                 <div key={key}>
                   <div className="flex justify-between mb-1">
@@ -156,30 +207,38 @@ export default function SellerSignupPage() {
                     </span>
                   </div>
                   <p className="text-xs text-neutral-500 mb-2">{desc}</p>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="10000"
-                    step="100"
-                    {...field(key)}
-                  />
+                  <Input type="number" min="0" max="10000" step="100" {...field(key)} />
                 </div>
               ))}
               <Separator />
-              <div className={`flex justify-between text-sm font-semibold ${payoutValid ? "text-emerald-400" : "text-red-400"}`}>
+              <div
+                className={`flex justify-between text-sm font-semibold ${
+                  payoutValid ? "text-emerald-400" : "text-red-400"
+                }`}
+              >
                 <span>Total</span>
-                <span>{(payoutTotal / 100).toFixed(0)}% {payoutValid ? "✓" : "(must equal 100%)"}</span>
+                <span>
+                  {(payoutTotal / 100).toFixed(0)}% {payoutValid ? "OK" : "(must equal 100%)"}
+                </span>
               </div>
             </CardContent>
           </Card>
 
           <Button type="submit" size="lg" className="w-full" disabled={isSubmitting || !payoutValid}>
             {isSubmitting ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Creating Account…</>
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Creating Account...
+              </>
             ) : (
               "Create Seller Account"
             )}
           </Button>
+
+          {error && (
+            <p className="text-sm text-red-400 bg-red-950/30 border border-red-900 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
         </form>
       )}
     </div>

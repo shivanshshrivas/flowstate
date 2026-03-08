@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -27,11 +28,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  MOCK_ANALYTICS,
-  MOCK_SELLERS,
-  MOCK_WEBHOOK_EVENTS,
-} from "@/lib/mock-data";
-import {
+  type Order,
+  type Seller,
+  type WebhookEvent,
   EscrowProgressBar,
   OrderState,
   ORDER_STATE_LABELS,
@@ -46,9 +45,116 @@ function isPipelineState(state: OrderState): state is PipelineState {
   return ORDER_STATE_SEQUENCE.includes(state);
 }
 
+function deriveAnalytics(orders: Order[]) {
+  const totalOrders = orders.length;
+  const totalVolumeUsd = orders.reduce((sum, order) => sum + order.total_usd, 0);
+
+  const activeEscrows = orders.filter((order) =>
+    [
+      OrderState.INITIATED,
+      OrderState.ESCROWED,
+      OrderState.LABEL_CREATED,
+      OrderState.SHIPPED,
+      OrderState.IN_TRANSIT,
+    ].includes(order.state)
+  ).length;
+
+  const disputed = orders.filter((order) => order.state === OrderState.DISPUTED).length;
+  const disputeRate = totalOrders > 0 ? disputed / totalOrders : 0;
+
+  const resolvedDurations = orders
+    .filter((order) =>
+      [OrderState.DELIVERED, OrderState.FINALIZED, OrderState.DISPUTED].includes(order.state)
+    )
+    .map((order) => {
+      const start = Date.parse(order.created_at);
+      const end = Date.parse(order.updated_at);
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return 0;
+      return (end - start) / (1000 * 60 * 60);
+    })
+    .filter((hours) => hours > 0);
+
+  const avgResolutionHours =
+    resolvedDurations.length > 0
+      ? resolvedDurations.reduce((sum, hours) => sum + hours, 0) / resolvedDurations.length
+      : 0;
+
+  const byDay = new Map<string, { date: string; count: number; volume_usd: number }>();
+  for (const order of orders) {
+    const date = order.created_at.slice(0, 10);
+    const existing = byDay.get(date);
+    if (existing) {
+      existing.count += 1;
+      existing.volume_usd += order.total_usd;
+    } else {
+      byDay.set(date, { date, count: 1, volume_usd: order.total_usd });
+    }
+  }
+
+  const ordersByDay = Array.from(byDay.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-14);
+
+  if (ordersByDay.length === 0) {
+    ordersByDay.push({
+      date: new Date().toISOString().slice(0, 10),
+      count: 0,
+      volume_usd: 0,
+    });
+  }
+
+  return {
+    total_orders: totalOrders,
+    total_volume_usd: totalVolumeUsd,
+    active_escrows: activeEscrows,
+    dispute_rate: disputeRate,
+    avg_resolution_hours: avgResolutionHours,
+    orders_by_day: ordersByDay,
+  };
+}
+
 function AdminDashboardContent() {
-  const analytics = MOCK_ANALYTICS;
-  const { orders } = useOrderStore();
+  const { orders, fetchOrders } = useOrderStore();
+  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [webhookEvents, setWebhookEvents] = useState<WebhookEvent[]>([]);
+  const [loadingPlatformData, setLoadingPlatformData] = useState(false);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPlatformData() {
+      setLoadingPlatformData(true);
+      try {
+        const [sellersResponse, webhooksResponse] = await Promise.all([
+          fetch("/api/sellers", { cache: "no-store" }),
+          fetch("/api/webhooks/events?limit=25", { cache: "no-store" }),
+        ]);
+
+        if (!cancelled && sellersResponse.ok) {
+          const payload = (await sellersResponse.json()) as { sellers?: Seller[] };
+          setSellers(payload.sellers ?? []);
+        }
+
+        if (!cancelled && webhooksResponse.ok) {
+          const payload = (await webhooksResponse.json()) as { events?: WebhookEvent[] };
+          setWebhookEvents(payload.events ?? []);
+        }
+      } finally {
+        if (!cancelled) setLoadingPlatformData(false);
+      }
+    }
+
+    loadPlatformData();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const analytics = useMemo(() => deriveAnalytics(orders), [orders]);
 
   const pipelineCounts = ORDER_STATE_SEQUENCE.reduce(
     (counts, state) => ({ ...counts, [state]: 0 }),
@@ -280,7 +386,15 @@ function AdminDashboardContent() {
 
         <TabsContent value="sellers">
           <div className="space-y-3">
-            {MOCK_SELLERS.map((seller) => (
+            {loadingPlatformData && sellers.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-neutral-500">
+                  Loading sellers...
+                </CardContent>
+              </Card>
+            )}
+
+            {sellers.map((seller) => (
               <Card key={seller.id}>
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
@@ -330,6 +444,14 @@ function AdminDashboardContent() {
                 </CardContent>
               </Card>
             ))}
+
+            {!loadingPlatformData && sellers.length === 0 && (
+              <Card>
+                <CardContent className="p-8 text-center text-sm text-neutral-500">
+                  No sellers found.
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
 
@@ -340,7 +462,11 @@ function AdminDashboardContent() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {MOCK_WEBHOOK_EVENTS.map((event) => (
+                {loadingPlatformData && webhookEvents.length === 0 && (
+                  <p className="text-sm text-neutral-500">Loading webhook events...</p>
+                )}
+
+                {webhookEvents.map((event) => (
                   <div key={event.id}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-3">
@@ -383,6 +509,10 @@ function AdminDashboardContent() {
                     <Separator className="mt-3" />
                   </div>
                 ))}
+
+                {!loadingPlatformData && webhookEvents.length === 0 && (
+                  <p className="text-sm text-neutral-500">No webhook events found.</p>
+                )}
               </div>
             </CardContent>
           </Card>
