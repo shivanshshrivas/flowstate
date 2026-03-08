@@ -1,0 +1,14 @@
+{
+  "name": "gas-report",
+  "description": "Get on-chain gas cost breakdown by contract function for the platform",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "project_id": {
+        "type": "string",
+        "description": "The platform project ID (from SYSTEM_CONTEXT user_id)"
+      }
+    },
+    "required": ["project_id"]
+  }
+}

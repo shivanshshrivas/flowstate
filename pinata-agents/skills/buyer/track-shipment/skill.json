@@ -1,0 +1,18 @@
+{
+  "name": "track-shipment",
+  "description": "Get carrier, tracking number, current location, ETA, and tracking history for a buyer's shipped order",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "buyer_wallet": {
+        "type": "string",
+        "description": "The buyer's Ethereum wallet address (from SYSTEM_CONTEXT user_id)"
+      },
+      "order_id": {
+        "type": "string",
+        "description": "The order ID to track"
+      }
+    },
+    "required": ["buyer_wallet", "order_id"]
+  }
+}

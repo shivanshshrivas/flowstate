@@ -1,0 +1,22 @@
+{
+  "name": "get-payouts",
+  "description": "Get the payout history for the seller including amounts, phases, and transaction hashes",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "seller_id": {
+        "type": "string",
+        "description": "The seller's wallet address or ID (from SYSTEM_CONTEXT user_id)"
+      },
+      "page": {
+        "type": "number",
+        "description": "Page number (default 1)"
+      },
+      "limit": {
+        "type": "number",
+        "description": "Results per page (default 20)"
+      }
+    },
+    "required": ["seller_id"]
+  }
+}

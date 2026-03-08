@@ -1,0 +1,18 @@
+{
+  "name": "get-receipt",
+  "description": "Retrieve the invoice and receipt for a buyer's order, including line items, totals, payment method, and IPFS document URL",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "buyer_wallet": {
+        "type": "string",
+        "description": "The buyer's Ethereum wallet address (from SYSTEM_CONTEXT user_id)"
+      },
+      "order_id": {
+        "type": "string",
+        "description": "The order ID to retrieve the receipt for"
+      }
+    },
+    "required": ["buyer_wallet", "order_id"]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "webhook-logs",
+  "description": "Get webhook delivery logs, optionally filtered by status, to diagnose delivery failures",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "status": {
+        "type": "string",
+        "description": "Filter by delivery status",
+        "enum": ["delivered", "failed", "pending"]
+      },
+      "limit": {
+        "type": "number",
+        "description": "Number of logs to return (max 50)"
+      }
+    },
+    "required": []
+  }
+}
