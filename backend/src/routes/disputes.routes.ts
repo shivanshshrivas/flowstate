@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authPreHandler } from "../middleware/auth";
+import { callerIdentityPreHandler } from "../middleware/caller-identity";
+import { sellerDisputeOwnershipPreHandler } from "../middleware/ownership";
 import type { DisputeService } from "../services/dispute.service";
 
 const createDisputeSchema = z.object({
@@ -55,7 +57,7 @@ export function disputesRoutes(disputeService: DisputeService) {
     // POST /disputes/:id/respond
     fastify.post(
       "/:id/respond",
-      { preHandler: authPreHandler },
+      { preHandler: [authPreHandler, callerIdentityPreHandler, sellerDisputeOwnershipPreHandler] },
       async (request, reply) => {
         const { id } = request.params as { id: string };
         const body = respondDisputeSchema.safeParse(request.body);

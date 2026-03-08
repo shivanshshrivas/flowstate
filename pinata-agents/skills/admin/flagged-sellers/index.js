@@ -20,6 +20,8 @@ async function run({ project_id, threshold }) {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
+      'X-Caller-User-Id': project_id,
+      'X-Caller-Role': 'admin',
       'Content-Type': 'application/json',
     },
   });

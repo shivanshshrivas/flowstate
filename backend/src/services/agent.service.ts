@@ -82,14 +82,16 @@ export class AgentService {
           // Step 2: connect accepted → send chat message
           if (parsed.type === "res" && parsed.ok === true && parsed.id?.endsWith("-connect")) {
             const idempotencyKey = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+            const sessionKey = `user:${userId}`;
+            const wrappedMessage = `[SYSTEM_CONTEXT: user_id=${userId}, role=${role}]\n\n${message}`;
             const chatReq = JSON.stringify({
               type: "req",
               method: "chat.send",
               id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
               params: {
-                sessionKey: "agent:main:main",
+                sessionKey,
                 idempotencyKey,
-                message,
+                message: wrappedMessage,
               },
             });
             console.log("[agent-ws] sending chat:", chatReq);

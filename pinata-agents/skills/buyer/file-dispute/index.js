@@ -6,11 +6,13 @@ const VALID_REASONS = ['item_damaged', 'item_not_received', 'wrong_item', 'not_a
 /**
  * File a dispute for a buyer's order.
  * @param {Object} params
+ * @param {string} params.buyer_wallet - The buyer's wallet address (from SYSTEM_CONTEXT)
  * @param {string} params.order_id - The order ID to dispute
  * @param {string} params.reason - Dispute reason category
  * @param {string} params.description - Detailed description of the issue
  */
-async function run({ order_id, reason, description }) {
+async function run({ buyer_wallet, order_id, reason, description }) {
+  if (!buyer_wallet) return { error: 'buyer_wallet is required' };
   if (!order_id) return { error: 'order_id is required' };
   if (!reason) return { error: 'reason is required' };
   if (!VALID_REASONS.includes(reason)) {
@@ -24,6 +26,8 @@ async function run({ order_id, reason, description }) {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
+      'X-Caller-User-Id': buyer_wallet,
+      'X-Caller-Role': 'buyer',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ order_id, reason, description }),

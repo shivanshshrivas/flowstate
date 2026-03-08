@@ -4,17 +4,19 @@ const API_KEY = process.env.FLOWSTATE_API_KEY;
 /**
  * Get shipment tracking info for a buyer's order.
  * @param {Object} params
+ * @param {string} params.buyer_wallet - The buyer's wallet address (from SYSTEM_CONTEXT)
  * @param {string} params.order_id - The order ID to track
  */
-async function run({ order_id }) {
-  if (!order_id) {
-    return { error: 'order_id is required' };
-  }
+async function run({ buyer_wallet, order_id }) {
+  if (!buyer_wallet) return { error: 'buyer_wallet is required' };
+  if (!order_id) return { error: 'order_id is required' };
 
   const res = await fetch(`${API_URL}/api/v1/shipping/track/${encodeURIComponent(order_id)}`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${API_KEY}`,
+      'X-Caller-User-Id': buyer_wallet,
+      'X-Caller-Role': 'buyer',
       'Content-Type': 'application/json',
     },
   });

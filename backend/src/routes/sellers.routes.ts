@@ -1,6 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { authPreHandler } from "../middleware/auth";
+import { callerIdentityPreHandler } from "../middleware/caller-identity";
+import { sellerOwnershipPreHandler } from "../middleware/ownership";
 import type { SellerService } from "../services/seller.service";
 
 const onboardSchema = z.object({
@@ -56,7 +58,7 @@ export function sellersRoutes(sellerService: SellerService) {
     // GET /sellers/:id/orders
     fastify.get(
       "/:id/orders",
-      { preHandler: authPreHandler },
+      { preHandler: [authPreHandler, callerIdentityPreHandler, sellerOwnershipPreHandler] },
       async (request, reply) => {
         const { id } = request.params as { id: string };
         const query = request.query as Record<string, string>;
@@ -76,7 +78,7 @@ export function sellersRoutes(sellerService: SellerService) {
     // GET /sellers/:id/metrics?period=30d
     fastify.get(
       "/:id/metrics",
-      { preHandler: authPreHandler },
+      { preHandler: [authPreHandler, callerIdentityPreHandler, sellerOwnershipPreHandler] },
       async (request, reply) => {
         const { id } = request.params as { id: string };
         const query = request.query as Record<string, string>;
@@ -90,7 +92,7 @@ export function sellersRoutes(sellerService: SellerService) {
     // GET /sellers/:id/payouts
     fastify.get(
       "/:id/payouts",
-      { preHandler: authPreHandler },
+      { preHandler: [authPreHandler, callerIdentityPreHandler, sellerOwnershipPreHandler] },
       async (request, reply) => {
         const { id } = request.params as { id: string };
         const query = request.query as Record<string, string>;

@@ -4,11 +4,13 @@ const API_KEY = process.env.FLOWSTATE_API_KEY;
 /**
  * Respond to a buyer dispute.
  * @param {Object} params
+ * @param {string} params.seller_id - The seller's ID (from SYSTEM_CONTEXT)
  * @param {string} params.dispute_id - The dispute ID to respond to
  * @param {string} params.action - 'accept' or 'contest'
  * @param {string} [params.evidence] - Seller's evidence (required when contesting)
  */
-async function run({ dispute_id, action, evidence }) {
+async function run({ seller_id, dispute_id, action, evidence }) {
+  if (!seller_id) return { error: 'seller_id is required' };
   if (!dispute_id) return { error: 'dispute_id is required' };
   if (!action) return { error: 'action is required' };
   if (!['accept', 'contest'].includes(action)) {
@@ -24,6 +26,8 @@ async function run({ dispute_id, action, evidence }) {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${API_KEY}`,
+        'X-Caller-User-Id': seller_id,
+        'X-Caller-Role': 'seller',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ action, evidence }),
