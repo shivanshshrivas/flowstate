@@ -10,6 +10,7 @@ export default defineConfig({
       "src/bridges/**/*.test.ts",
       "src/services/**/*.test.ts",
       "src/utils/**/*.test.ts",
+      "gateway/__tests__/**/*.test.ts",
     ],
     globals: true,
     environment: "node",

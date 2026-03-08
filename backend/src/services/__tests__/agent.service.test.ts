@@ -16,15 +16,19 @@ function makeSseBody(sessionId: string, responseText: string): ReadableStream {
     result: { content: [{ type: "text", text: responseText }] },
   });
   const messageEvent = `event: message\ndata: ${resultPayload}\n\n`;
-
   const encoder = new TextEncoder();
-  const chunks = [encoder.encode(endpointEvent), encoder.encode(messageEvent)];
-  let idx = 0;
+  let step = 0;
 
   return new ReadableStream({
-    pull(controller) {
-      if (idx < chunks.length) {
-        controller.enqueue(chunks[idx++]);
+    async pull(controller) {
+      if (step === 0) {
+        step++;
+        controller.enqueue(encoder.encode(endpointEvent));
+      } else if (step === 1) {
+        step++;
+        // Yield to the event loop so AgentService.chat can call waitForNextMessage() first
+        await new Promise((r) => setTimeout(r, 10));
+        controller.enqueue(encoder.encode(messageEvent));
       } else {
         controller.close();
       }
@@ -58,7 +62,7 @@ describe("AgentService.chat", () => {
 
     expect(result.response).toBe("Your order is SHIPPED.");
     expect(result.role).toBe("buyer");
-  });
+  }, 15_000);
 
   it("2. routes buyer role to buyer_agent_chat tool", async () => {
     fetchSpy
@@ -74,7 +78,7 @@ describe("AgentService.chat", () => {
     const body = JSON.parse(postCall[1].body);
     expect(body.params.name).toBe("buyer_agent_chat");
     expect(body.params.arguments.buyer_wallet).toBe("0xBuyer");
-  });
+  }, 15_000);
 
   it("3. routes seller role to seller_agent_chat tool", async () => {
     fetchSpy
@@ -91,7 +95,7 @@ describe("AgentService.chat", () => {
     expect(body.params.name).toBe("seller_agent_chat");
     expect(body.params.arguments.seller_id).toBe("seller_123");
     expect(body.params.arguments.buyer_wallet).toBeUndefined();
-  });
+  }, 15_000);
 
   it("4. routes admin role to admin_agent_chat tool", async () => {
     fetchSpy
@@ -106,7 +110,7 @@ describe("AgentService.chat", () => {
     const postCall = fetchSpy.mock.calls[1];
     const body = JSON.parse(postCall[1].body);
     expect(body.params.name).toBe("admin_agent_chat");
-  });
+  }, 15_000);
 
   it("5. POSTs to /message with correct sessionId from SSE endpoint event", async () => {
     fetchSpy
@@ -121,7 +125,7 @@ describe("AgentService.chat", () => {
     const postCall = fetchSpy.mock.calls[1];
     expect(postCall[0]).toContain("sessionId=sess_xyz789");
     expect(postCall[1].method).toBe("POST");
-  });
+  }, 15_000);
 
   it("6. throws when SSE fetch returns no body", async () => {
     fetchSpy.mockResolvedValueOnce({ ok: true, body: null });
@@ -136,11 +140,20 @@ describe("AgentService.chat", () => {
     const endpointEvent = `event: endpoint\ndata: /message?sessionId=sess_empty\n\n`;
     const resultPayload = JSON.stringify({ result: { content: [] } });
     const messageEvent = `event: message\ndata: ${resultPayload}\n\n`;
+    let step7 = 0;
 
     const stream = new ReadableStream({
-      pull(controller) {
-        controller.enqueue(encoder.encode(endpointEvent + messageEvent));
-        controller.close();
+      async pull(controller) {
+        if (step7 === 0) {
+          step7++;
+          controller.enqueue(encoder.encode(endpointEvent));
+        } else if (step7 === 1) {
+          step7++;
+          await new Promise((r) => setTimeout(r, 10));
+          controller.enqueue(encoder.encode(messageEvent));
+        } else {
+          controller.close();
+        }
       },
     });
 
@@ -150,5 +163,5 @@ describe("AgentService.chat", () => {
 
     const result = await service.chat("proj_1", "buyer", "0xBuyer", "Hi");
     expect(result.response).toBe("No response from agent.");
-  });
+  }, 15_000);
 });

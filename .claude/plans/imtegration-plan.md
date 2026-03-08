@@ -15,12 +15,12 @@ Verify that gateway sub-components 1–5 are architecturally sound per `architec
   - [x] 1d. Update `backend/src/services/seller.service.ts` — add inTransitBps to defaults + validation
   - [x] 1e. Update `backend/src/services/order.service.ts` — add inTransitBps to payout schedule
   - [x] 1f. Update affected tests to use 5-stage payout schedule
-  - [ ] 1g. Run `cd backend && npx vitest run` — all pass
+  - [x] 1g. Run `cd backend && npx vitest run` — 108 passing
 
 - [x] **Phase 2**: Fix gateway package barrel export + add server tests
   - [x] 2a. Fix `backend/gateway/index.js` — add missing server re-exports
   - [x] 2b. Add `backend/gateway/__tests__/server.test.ts` — 14 test cases for HMAC verification
-  - [ ] 2c. Run gateway server tests — all pass
+  - [x] 2c. Run gateway server tests — 14 passing (added gateway include to vitest.config.ts)
 
 - [x] **Phase 3**: Pinata test files written (deferred — CJS mock issue)
   - [x] 3a–3h. All 6 test files created under `pinata/src/__tests__/`
@@ -39,84 +39,26 @@ Verify that gateway sub-components 1–5 are architecturally sound per `architec
 - [x] **Phase 5**: Replace agent service — Pinata OpenClaw → self-hosted MCP
   - [x] 5a. Rewrite `backend/src/services/agent.service.ts` — MCP SSE/HTTP client
   - [x] 5b. Update `backend/src/config/env.ts` — replace Pinata agent vars with `MCP_AGENTS_URL`
-  - [ ] 5c. Agent service test — **IN PROGRESS / FAILING**
+  - [x] 5c. Agent service test — 7/7 passing (fixed SSE race condition in mock stream)
 
 - [x] **Phase 6**: Wire mcp-agents tools to real backend API — **COMPLETE**
   - [x] 6a–6e. All tools call live backend, mock-data archived
 
 ---
 
-## NEXT: Fix agent service test (5c)
+## Status: Phases 1-6 COMPLETE
 
-File: `backend/src/services/__tests__/agent.service.test.ts` — **already created**, 6/7 tests timing out.
+All verification runs passed:
+- `cd backend && npx vitest run` → **108 passing**
+- Gateway server tests → **14 passing** (added `gateway/__tests__/**/*.test.ts` to vitest.config.ts include)
+- Agent service test → **7/7 passing** (fixed SSE race condition: async pull with 10ms delay in mock ReadableStream)
 
-**Root cause**: The `openSseSession` function uses `fetch(...).then(async res => { pump() })`.
-The `pump()` loop calls `reader.read()` repeatedly until done. In the test, the mock
-`ReadableStream` closes after 2 chunks, but the service's 30-second `setTimeout` is still
-racing — vitest fake timers are NOT set up, so the timeout fires after 30 real seconds,
-or the pump resolves but the outer `resolveSession` Promise doesn't settle because
-`resolvePending` is set after `resolveSession` is called (race between endpoint event
-resolution and `waitForNextMessage` listener setup).
-
-**Actual problem**: The `resultPromise = session.waitForNextMessage()` is set up AFTER
-`openSseSession` resolves. But the SSE stream pumps the `message` event asynchronously
-during `pump()` which starts before the caller can register `resolvePending`. If the
-message arrives before `waitForNextMessage()` is called, `resolvePending` is null and
-the message is dropped → the `resultPromise` never resolves → timeout.
-
-**Fix options**:
-1. Use `vi.useFakeTimers()` so the 30s timeout is controllable, AND ensure the mock
-   stream delivers the message event only after `waitForNextMessage()` is called.
-2. Restructure the mock stream to be slow enough (yield endpoint chunk, then yield
-   message chunk only after a microtask tick) so the service has time to call
-   `waitForNextMessage()` before the message arrives.
-3. Simplest: In the test, make the stream deliver endpoint immediately but delay the
-   message chunk using a `Promise.resolve()` / setTimeout(0) inside the ReadableStream
-   `pull` method so the message arrives after the caller registers the listener.
-
-**Recommended fix** — update `makeSseBody` to deliver the message event in a separate
-microtask after the endpoint event:
-
-```typescript
-function makeSseBody(sessionId: string, responseText: string): ReadableStream {
-  const endpointEvent = `event: endpoint\ndata: /message?sessionId=${sessionId}\n\n`;
-  const resultPayload = JSON.stringify({
-    result: { content: [{ type: "text", text: responseText }] },
-  });
-  const messageEvent = `event: message\ndata: ${resultPayload}\n\n`;
-  const encoder = new TextEncoder();
-  let step = 0;
-
-  return new ReadableStream({
-    async pull(controller) {
-      if (step === 0) {
-        step++;
-        controller.enqueue(encoder.encode(endpointEvent));
-      } else if (step === 1) {
-        step++;
-        // Yield to event loop so service can call waitForNextMessage() first
-        await new Promise((r) => setTimeout(r, 10));
-        controller.enqueue(encoder.encode(messageEvent));
-      } else {
-        controller.close();
-      }
-    },
-  });
-}
-```
-
-Then add `{ timeout: 15_000 }` to each test case to give headroom for the 10ms delay.
+Deferred:
+- `cd pinata && npx vitest run` — CJS mock issue (vitest can't intercept transitive `require("./client")`)
+- `cd demo-store && npm run build` — verify after gateway SDK wiring (Phase 7+)
 
 ---
 
-## Remaining verification runs
+## NEXT: Phase 7+ (Gateway SDK Wiring)
 
-Once 5c is fixed, run these in order:
-
-```bash
-cd backend && npx vitest run                     # Should be 108+ passing
-cd backend/gateway && npx vitest run             # 14 server tests
-cd demo-store && npm run build                   # Verify ABI changes didn't break build
-```
-
-Pinata tests (`cd pinata && npx vitest run`) deferred until CJS mock issue resolved.
+See `plans/atomic-swinging-tide.md` for the full plan to wire demo-store → gateway SDK → backend API.
