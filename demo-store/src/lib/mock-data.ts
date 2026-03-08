@@ -1,5 +1,4 @@
 import {
-  type Product,
   type Order,
   type Seller,
   type SellerMetrics,
@@ -8,7 +7,8 @@ import {
   type WebhookEvent,
   type ShippingOption,
   OrderState,
-} from "./flowstate/types";
+} from "@shivanshshrivas/flowstate/types";
+import type { Product } from "@/types/product";
 
 // ─── Mock Products ────────────────────────────────────────────────────────
 

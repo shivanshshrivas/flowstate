@@ -14,6 +14,7 @@ export class SellerService {
       const total =
         input.payoutConfig.labelCreatedBps +
         input.payoutConfig.shippedBps +
+        input.payoutConfig.inTransitBps +
         input.payoutConfig.deliveredBps +
         input.payoutConfig.finalizedBps;
 
@@ -29,6 +30,7 @@ export class SellerService {
     const defaultPayoutConfig = {
       labelCreatedBps: PAYOUT_DEFAULTS.LABEL_CREATED_BPS,
       shippedBps: PAYOUT_DEFAULTS.SHIPPED_BPS,
+      inTransitBps: PAYOUT_DEFAULTS.IN_TRANSIT_BPS,
       deliveredBps: PAYOUT_DEFAULTS.DELIVERED_BPS,
       finalizedBps: PAYOUT_DEFAULTS.FINALIZED_BPS,
     };

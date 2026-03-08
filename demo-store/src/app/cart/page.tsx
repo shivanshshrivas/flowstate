@@ -3,14 +3,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Minus, Plus, Trash2, ShoppingCart } from "lucide-react";
+import { useAccount } from "wagmi";
 import { useCartStore } from "@/stores/cart-store";
 import { formatUsd } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { RequireRole } from "@/components/guards/RequireRole";
 
-export default function CartPage() {
+function CartContent() {
   const { items, removeItem, updateQuantity, subtotalUsd } = useCartStore();
+  const { isConnected } = useAccount();
 
   if (items.length === 0) {
     return (
@@ -97,16 +100,34 @@ export default function CartPage() {
               </div>
               <p className="text-xs text-neutral-500">Shipping calculated at checkout.</p>
               <p className="text-xs text-neutral-500">Payment is escrowed via FlowState smart contract.</p>
-              <p className="text-sm text-neutral-400 text-center">
-                Use the <strong>Buy with FlowState</strong> button on each product page to checkout.
-              </p>
-              <Link href="/">
-                <Button className="w-full" variant="outline">Continue Shopping</Button>
-              </Link>
+              <div className="space-y-3 pt-1">
+                {isConnected ? (
+                  <Link href="/checkout" className="block">
+                    <Button className="w-full">Continue to Checkout</Button>
+                  </Link>
+                ) : (
+                  <Button className="w-full" disabled title="Connect your wallet to checkout">
+                    Connect Wallet to Checkout
+                  </Button>
+                )}
+                <Link href="/" className="block">
+                  <Button className="w-full" variant="outline">
+                    Continue Shopping
+                  </Button>
+                </Link>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CartPage() {
+  return (
+    <RequireRole roles={["buyer"]}>
+      <CartContent />
+    </RequireRole>
   );
 }

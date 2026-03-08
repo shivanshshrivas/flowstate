@@ -1,0 +1,16 @@
+
+# Root workspace node_modules
+node_modules/
+package-lock.json
+
+# Gateway package build output
+gateway/dist/
+gateway/node_modules/
+
+# Tarballs
+backend/gateway/*.tgz
+
+# Environment files
+.env
+.env.local
+.env.production

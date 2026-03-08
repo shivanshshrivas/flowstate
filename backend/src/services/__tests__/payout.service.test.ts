@@ -2,33 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PayoutService } from "../payout.service";
 import { makePayout } from "../../__tests__/helpers/fixtures";
 
-const resultQueue: any[] = [];
-let insertResult: any[] = [];
-
 vi.mock("../../db/client", () => {
-  function createChainableProxy(): any {
-    const handler: ProxyHandler<object> = {
-      get(_target, prop) {
-        if (prop === "then") {
-          const result = resultQueue.shift() ?? [];
-          return (resolve: any) => resolve(result);
-        }
-        if (prop === "insert") {
-          // insert -> values -> returning chain
-          return vi.fn().mockImplementation(() => ({
-            values: vi.fn().mockImplementation(() => ({
-              returning: vi
-                .fn()
-                .mockImplementation(() => Promise.resolve(insertResult)),
-            })),
-          }));
-        }
-        return vi.fn().mockImplementation(() => createChainableProxy());
-      },
-    };
-    return new Proxy({}, handler);
-  }
-  return { db: createChainableProxy() };
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
 });
 
 vi.mock("../../events/emitter", () => ({
@@ -40,6 +18,13 @@ vi.mock("../../events/emitter", () => ({
   },
 }));
 
+vi.mock("../../utils/id-generator", () => ({
+  generateId: {
+    payout: vi.fn().mockReturnValue("fs_pay_test123"),
+  },
+}));
+
+import { db } from "../../db/client";
 import { flowStateEmitter } from "../../events/emitter";
 
 describe("PayoutService", () => {
@@ -47,15 +32,14 @@ describe("PayoutService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    resultQueue.length = 0;
-    insertResult = [];
     service = new PayoutService();
   });
 
   describe("recordPayout", () => {
     it("should insert a payout record and emit event", async () => {
       const payout = makePayout();
-      insertResult = [payout];
+      (db as any).mockResolvedValueOnce([payout]); // insert ... returning *
+      (db as any).mockResolvedValueOnce([{ projectId: "proj_1" }]); // select project_id from orders
 
       const result = await service.recordPayout({
         orderId: payout.orderId,
@@ -81,10 +65,8 @@ describe("PayoutService", () => {
   describe("getSellerPayouts", () => {
     it("should return paginated payouts", async () => {
       const payouts = [makePayout(), makePayout()];
-      // First query: data (select.from.where.orderBy.limit.offset)
-      resultQueue.push(payouts);
-      // Second query: count (select.from.where)
-      resultQueue.push(payouts);
+      (db as any).mockResolvedValueOnce(payouts);            // select * from payouts
+      (db as any).mockResolvedValueOnce([{ count: "2" }]);  // select count(*)
 
       const result = await service.getSellerPayouts("fs_sel_test", 1, 20);
 

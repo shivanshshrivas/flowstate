@@ -1,16 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { makeOrder } from "../../__tests__/helpers/fixtures";
 
-vi.mock("../../db/client", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-  },
-}));
+vi.mock("../../db/client", () => {
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
+});
 
 vi.mock("../../events/emitter", () => ({
   flowStateEmitter: {
@@ -42,14 +38,14 @@ describe("State Transition Worker", () => {
       // The worker processor checks order state before acting.
       // When the order is already in the target state, it should skip.
       const order = makeOrder({ state: "SHIPPED" });
-      (db.limit as any).mockResolvedValueOnce([order]);
+      (db as any).mockResolvedValueOnce([order]);
 
       // This tests the design principle — the worker re-reads state before acting.
       expect(order.state).toBe("SHIPPED");
     });
 
     it("should skip if order not found", async () => {
-      (db.limit as any).mockResolvedValueOnce([]);
+      (db as any).mockResolvedValueOnce([]);
       // Worker should handle gracefully (no crash)
       expect(true).toBe(true);
     });

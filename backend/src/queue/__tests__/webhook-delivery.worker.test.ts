@@ -1,18 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("../../db/client", () => ({
-  db: {
-    select: vi.fn().mockReturnThis(),
-    from: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockResolvedValue([]),
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockResolvedValue(undefined),
-    returning: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-  },
-}));
+vi.mock("../../db/client", () => {
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
+});
 
 vi.mock("../../utils/id-generator", () => ({
   generateId: {

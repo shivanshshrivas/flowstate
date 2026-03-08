@@ -1,16 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { AuthService } from "../auth.service";
 
-vi.mock("../../db/client", () => ({
-  db: {
-    insert: vi.fn().mockReturnThis(),
-    values: vi.fn().mockReturnThis(),
-    returning: vi.fn().mockResolvedValue([]),
-    update: vi.fn().mockReturnThis(),
-    set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockReturnThis(),
-  },
-}));
+vi.mock("../../db/client", () => {
+  const mockDb = Object.assign(vi.fn().mockResolvedValue([]), {
+    json: (v: any) => v,
+  });
+  return { db: mockDb };
+});
 
 vi.mock("../../utils/id-generator", () => ({
   generateId: {
@@ -44,7 +40,7 @@ describe("AuthService", () => {
 
       expect(result.projectId).toBe("fs_proj_test123");
       expect(result.apiKey).toBe("fs_live_key_test12345678901");
-      expect(db.insert).toHaveBeenCalledTimes(2); // project + api key
+      expect(db).toHaveBeenCalledTimes(2); // project + api key
     });
   });
 
@@ -57,8 +53,7 @@ describe("AuthService", () => {
 
       expect(result.apiKeyId).toBe("fs_key_test123");
       expect(result.apiKey).toBe("fs_live_key_test12345678901");
-      expect(db.update).toHaveBeenCalled(); // deactivate old
-      expect(db.insert).toHaveBeenCalled(); // create new
+      expect(db).toHaveBeenCalledTimes(2); // deactivate old + create new
     });
   });
 });

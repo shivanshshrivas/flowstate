@@ -1,4 +1,4 @@
-import { type OrderState, ORDER_STATE_LABELS } from "@/lib/flowstate/types";
+import { type OrderState, ORDER_STATE_LABELS } from "@shivanshshrivas/flowstate";
 import { Badge } from "@/components/ui/badge";
 
 const STATUS_VARIANTS: Record<string, "default" | "secondary" | "success" | "warning" | "destructive" | "info" | "outline"> = {

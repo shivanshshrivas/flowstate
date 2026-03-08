@@ -1,4 +1,4 @@
-const { pinata, gatewayUrl } = require("./client");
+const { getClient, gatewayUrl } = require("./client");
 
 /**
  * Pins state transition proof receipts to IPFS.
@@ -37,6 +37,7 @@ async function pinTrackingReceipt({
   trackingNumber, carrier, shippoStatus, statusDetails,
   onChainTxHash, payoutBps,
 }) {
+  const pinata = getClient();
   const receipt = {
     receiptVersion: "1.0",
     receiptType: "tracking_state_transition",
@@ -82,6 +83,7 @@ async function pinPayoutReceipt({
   orderId, escrowState, sellerWallet,
   amountToken, token, onChainTxHash, platformFeeTaken,
 }) {
+  const pinata = getClient();
   const receipt = {
     receiptVersion: "1.0",
     receiptType: "payout",

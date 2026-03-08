@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/user-store";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { UserRole } from "@/lib/flowstate/types";
+import type { UserRole } from "@shivanshshrivas/flowstate";
 
 interface Props {
   roles: UserRole[];
@@ -22,7 +22,11 @@ export function RequireRole({ roles, children, redirect = true }: Props) {
 
   useEffect(() => {
     if (supabaseConfigured && !isLoading && !hasAccess && redirect) {
-      router.replace(user ? "/" : "/auth/login");
+      if (user) {
+        router.replace(user.role === "seller" ? "/seller" : "/");
+      } else {
+        router.replace("/auth/login");
+      }
     }
   }, [isLoading, hasAccess, supabaseConfigured, redirect, user, router]);
 

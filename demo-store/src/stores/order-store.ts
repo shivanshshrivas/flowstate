@@ -1,6 +1,5 @@
 import { create } from "zustand";
-import { type Order, OrderState } from "@/lib/flowstate/types";
-import { MOCK_ORDERS } from "@/lib/mock-data";
+import { type Order, OrderState } from "@shivanshshrivas/flowstate/types";
 
 interface OrderStore {
   orders: Order[];
@@ -9,51 +8,62 @@ interface OrderStore {
   fetchOrders: () => Promise<void>;
   getOrder: (id: string) => Order | undefined;
   addOrder: (order: Order) => void;
-  advanceOrderState: (orderId: string, newState: OrderState) => void;
+  advanceOrderState: (orderId: string, newState: OrderState) => Promise<void>;
 }
 
 export const useOrderStore = create<OrderStore>((set, get) => ({
-  orders: MOCK_ORDERS,
+  orders: [],
   isLoading: false,
 
   fetchOrders: async () => {
     set({ isLoading: true });
-    // TODO: fetch from API when backend is ready
-    // Simulate network delay
-    await new Promise((r) => setTimeout(r, 500));
-    set({ orders: MOCK_ORDERS, isLoading: false });
+    try {
+      const response = await fetch("/api/orders", { cache: "no-store" });
+      if (!response.ok) {
+        set({ orders: [], isLoading: false });
+        return;
+      }
+
+      const payload = (await response.json()) as { orders?: Order[] };
+      set({ orders: payload.orders ?? [], isLoading: false });
+    } catch {
+      set({ orders: [], isLoading: false });
+    }
   },
 
   getOrder: (id) => get().orders.find((o) => o.id === id),
 
-  addOrder: (order) => set((state) => ({ orders: [order, ...state.orders] })),
-
-  advanceOrderState: (orderId, newState) => {
-    set((state) => ({
-      orders: state.orders.map((o) => {
-        if (o.id !== orderId) return o;
-        const now = new Date().toISOString();
+  addOrder: (order) =>
+    set((state) => {
+      const existing = state.orders.find((entry) => entry.id === order.id);
+      if (existing) {
         return {
-          ...o,
-          state: newState,
-          updated_at: now,
-          state_history: [
-            ...o.state_history,
-            {
-              from: o.state,
-              to: newState,
-              timestamp: now,
-              triggeredBy: "seller" as const,
-              notes: "Manual demo advance",
-            },
-          ],
-          payout_schedule: o.payout_schedule.map((p) =>
-            p.state === newState
-              ? { ...p, releasedAt: now, txHash: `0x${Math.random().toString(16).slice(2)}` }
-              : p
-          ),
+          orders: state.orders.map((entry) => (entry.id === order.id ? order : entry)),
         };
-      }),
-    }));
+      }
+
+      return { orders: [order, ...state.orders] };
+    }),
+
+  advanceOrderState: async (orderId, newState) => {
+    try {
+      const response = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ state: newState }),
+      });
+
+      if (!response.ok) return;
+      const payload = (await response.json()) as { order?: Order };
+      if (!payload.order) return;
+
+      set((state) => ({
+        orders: state.orders.map((order) =>
+          order.id === orderId ? payload.order! : order
+        ),
+      }));
+    } catch {
+      // Ignore network errors in demo state controls.
+    }
   },
 }));

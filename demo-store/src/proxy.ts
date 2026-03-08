@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { UserRole } from "@/lib/flowstate/types";
+import type { UserRole } from "@shivanshshrivas/flowstate/types";
 
 const PROTECTED: { pattern: RegExp; roles: UserRole[] }[] = [
   { pattern: /^\/admin(\/|$)/, roles: ["admin"] },

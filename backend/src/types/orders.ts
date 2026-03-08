@@ -70,6 +70,7 @@ export interface ShippingRate {
 export interface PayoutSchedule {
   labelCreatedBps: number;
   shippedBps: number;
+  inTransitBps: number;
   deliveredBps: number;
   finalizedBps: number;
 }

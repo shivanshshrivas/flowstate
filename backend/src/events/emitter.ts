@@ -32,6 +32,7 @@ export interface PayoutRecordedEvent {
   payoutId: string;
   orderId: string;
   sellerId: string;
+  projectId?: string;
   state: string;
   amountToken: string;
   txHash?: string;

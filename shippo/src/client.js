@@ -1,11 +1,19 @@
-require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
-
 const { Shippo } = require("shippo");
 
-if (!process.env.SHIPPO_KEY) {
-  throw new Error("SHIPPO_KEY missing from .env");
+let _client = null;
+
+function initClient(apiKey) {
+  _client = new Shippo({ apiKeyHeader: apiKey });
 }
 
-const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_KEY });
+function getClient() {
+  if (!_client) {
+    // Fallback for standalone usage
+    require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
+    if (!process.env.SHIPPO_KEY) throw new Error("SHIPPO_KEY missing");
+    _client = new Shippo({ apiKeyHeader: process.env.SHIPPO_KEY });
+  }
+  return _client;
+}
 
-module.exports = { shippo };
+module.exports = { initClient, getClient };

@@ -6,7 +6,7 @@ import { parseEther } from "viem";
 import { Droplets, ExternalLink, Loader2, CheckCircle } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { CONTRACT_ADDRESSES, XRPL_EXPLORER_URL, XRPL_FAUCET_URL } from "@/lib/constants";
-import { MockRLUSDAbi } from "@/lib/flowstate/contracts/MockRLUSD.abi";
+import { FLUSDAbi } from "@shivanshshrivas/flowstate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatToken, shortenAddress } from "@/lib/utils";
@@ -20,7 +20,7 @@ export default function FaucetPage() {
   const { data: xrpBalance } = useBalance({ address });
   const { data: flusdBalance } = useReadContract({
     address: CONTRACT_ADDRESSES.mockRLUSD,
-    abi: MockRLUSDAbi,
+    abi: FLUSDAbi,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
     query: { enabled: !!address && !!CONTRACT_ADDRESSES.mockRLUSD },
@@ -33,7 +33,7 @@ export default function FaucetPage() {
     writeContract(
       {
         address: CONTRACT_ADDRESSES.mockRLUSD,
-        abi: MockRLUSDAbi,
+        abi: FLUSDAbi,
         functionName: "mint",
         args: [address, MINT_AMOUNT],
       },

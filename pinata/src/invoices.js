@@ -1,6 +1,6 @@
 const fs = require("fs");
 const path = require("path");
-const { pinata, gatewayUrl } = require("./client");
+const { getClient, gatewayUrl } = require("./client");
 
 /**
  * Pins an invoice PDF file to IPFS.
@@ -20,6 +20,7 @@ const { pinata, gatewayUrl } = require("./client");
  * @returns {{ pdfCid, jsonCid, pdfUrl, jsonUrl }}
  */
 async function pinInvoice(pdfPath, orderData) {
+  const pinata = getClient();
   // 1. Pin the invoice PDF
   const pdfBuffer = fs.readFileSync(pdfPath);
   const pdfFile = new File(

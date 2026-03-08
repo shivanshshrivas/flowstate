@@ -1,10 +1,10 @@
 "use client";
 
-import { type ShippingOption } from "@/lib/flowstate/types";
+import { useEffect, useState } from "react";
+import { type ShippingOption } from "@shivanshshrivas/flowstate";
 import { formatUsd } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CheckCircle, Truck } from "lucide-react";
-import { MOCK_SHIPPING_OPTIONS } from "@/lib/mock-data";
 
 interface ShippingSelectorProps {
   selected: ShippingOption | null;
@@ -12,9 +12,48 @@ interface ShippingSelectorProps {
 }
 
 export function ShippingSelector({ selected, onSelect }: ShippingSelectorProps) {
+  const [options, setOptions] = useState<ShippingOption[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOptions() {
+      try {
+        const response = await fetch("/api/shipping/options", { cache: "no-store" });
+        if (!response.ok) {
+          if (!cancelled) setOptions([]);
+          return;
+        }
+
+        const payload = (await response.json()) as { options?: ShippingOption[] };
+        if (!cancelled) setOptions(payload.options ?? []);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    loadOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (isLoading) {
+    return <p className="text-sm text-neutral-500">Loading shipping options...</p>;
+  }
+
+  if (options.length === 0) {
+    return (
+      <p className="text-sm text-neutral-500">
+        No shipping options available. Check your Supabase seed data.
+      </p>
+    );
+  }
+
   return (
     <div className="space-y-2">
-      {MOCK_SHIPPING_OPTIONS.map((option) => (
+      {options.map((option) => (
         <button
           key={option.id}
           type="button"
