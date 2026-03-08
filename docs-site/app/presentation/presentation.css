@@ -66,6 +66,22 @@ html.dark .pres-root {
   color: #e8e4dc;
 }
 
+/* Force light text throughout in dark mode */
+html.dark .pres-root h1,
+html.dark .pres-root h2,
+html.dark .pres-root h3,
+html.dark .pres-root h4 {
+  color: #e8e4dc;
+}
+
+html.dark .pres-root p {
+  color: #b5b1a9;
+}
+
+html.dark .pres-root code {
+  color: #d0ccc5;
+}
+
 /* --- Progress bar ------------------------------------------------- */
 .pres-progress {
   position: fixed;
@@ -303,7 +319,7 @@ html.dark .pres-root {
 }
 
 html.dark .pres-subtitle {
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 .pres-heading {
@@ -417,7 +433,15 @@ html.dark .pres-hero-package {
 }
 
 html.dark .pres-hero-hint {
-  color: #7a776f;
+  color: #9a978f;
+}
+
+html.dark .pres-pin-item h4 {
+  color: #e8e4dc;
+}
+
+html.dark .pres-timeline-node h4 {
+  color: #e8e4dc;
 }
 
 /* --- Slide 1: Problem --------------------------------------------- */
@@ -452,7 +476,7 @@ html.dark .pres-problem-icon {
 }
 
 html.dark .pres-card p {
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 /* --- Slide 2: Solution -------------------------------------------- */
@@ -495,6 +519,7 @@ html.dark .pres-card p {
 html.dark .pres-flow-arrow .node {
   background: rgba(178, 77, 24, 0.15);
   border-color: rgba(213, 106, 44, 0.3);
+  color: #e8e4dc;
 }
 
 /* --- Slide 3: Architecture ---------------------------------------- */
@@ -548,6 +573,7 @@ html.dark .pres-arch-layer {
 html.dark .pres-arch-chip {
   background: rgba(178, 77, 24, 0.12);
   border-color: rgba(213, 106, 44, 0.2);
+  color: #d0ccc5;
 }
 
 .pres-arch-connector {
@@ -610,7 +636,7 @@ html.dark .pres-arch-chip {
 
 html.dark .pres-fsm-node {
   background: rgba(178, 77, 24, 0.15);
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 .pres-slide.active .pres-fsm-node {
@@ -674,7 +700,7 @@ html.dark .pres-fsm-node {
 }
 
 html.dark .pres-contract-addr {
-  color: #7a776f;
+  color: #9a978f;
 }
 
 /* --- Slide 5: Shippo ---------------------------------------------- */
@@ -705,6 +731,7 @@ html.dark .pres-contract-addr {
 html.dark .pres-mapping-from {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.08);
+  color: #d0ccc5;
 }
 
 .pres-mapping-to {
@@ -813,7 +840,7 @@ html.dark .pres-pin-item {
 }
 
 html.dark .pres-pin-item p {
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 .pres-cid-example {
@@ -831,7 +858,7 @@ html.dark .pres-pin-item p {
 html.dark .pres-cid-example {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 /* --- Slide 7: Webhooks -------------------------------------------- */
@@ -988,7 +1015,7 @@ html.dark .pres-timeline-node::before {
 }
 
 html.dark .pres-timeline-node p {
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 .pres-slide.active .pres-timeline-node {
@@ -1065,7 +1092,7 @@ html.dark .pres-timeline-node p {
 }
 
 html.dark .pres-tagline {
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 /* --- Slide 10: Closing -------------------------------------------- */
@@ -1138,7 +1165,7 @@ html.dark .pres-badge {
 html.dark .pres-github-link {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.08);
-  color: #9a978f;
+  color: #b5b1a9;
 }
 
 /* --- Bottom nav bar ----------------------------------------------- */
@@ -1230,7 +1257,7 @@ html.dark .pres-nav-btn {
 }
 
 html.dark .pres-nav-counter {
-  color: #7a776f;
+  color: #9a978f;
 }
 
 /* --- Responsive --------------------------------------------------- */

@@ -65,7 +65,7 @@ export default async function RootLayout({
   const pageMap = await getPageMap();
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${display.variable} ${mono.variable}`}>
         <Layout
           editLink="Edit this page on GitHub"
