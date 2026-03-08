@@ -178,7 +178,7 @@ Three OpenClaw agents hosted on Pinata (agents.pinata.cloud).
 
 - Provider: OpenRouter
 - API Key: stored in Pinata Secrets Vault as `OPENROUTER_API_KEY`
-- Model: `nvidia/nemotron-ultra-253b` (or whichever Nemotron variant via OpenRouter)
+- Model: `nvidia/nemotron-3-nano-30b-a3b` (via OpenRouter — 256K context, purpose-built for agentic AI)
 - Additional secret: `FLOWSTATE_API_KEY` — injected so skills can call the Flow State API
 
 **BuyerAgent Skills (5):**

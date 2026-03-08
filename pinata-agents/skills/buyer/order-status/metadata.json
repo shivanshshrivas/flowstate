@@ -1,0 +1,3 @@
+{
+  "env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]
+}

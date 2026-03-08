@@ -16,6 +16,9 @@ const envSchema = z.object({
   PINATA_BUYER_AGENT_URL: z.string().optional(),
   PINATA_SELLER_AGENT_URL: z.string().optional(),
   PINATA_ADMIN_AGENT_URL: z.string().optional(),
+  PINATA_BUYER_AGENT_TOKEN: z.string().optional(),
+  PINATA_SELLER_AGENT_TOKEN: z.string().optional(),
+  PINATA_ADMIN_AGENT_TOKEN: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
