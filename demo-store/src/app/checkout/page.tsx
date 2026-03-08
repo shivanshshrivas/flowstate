@@ -10,9 +10,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Lock,
   ShoppingCart,
 } from "lucide-react";
+import { FlowStateCheckoutButton } from "@flowstate/gateway";
 import { RequireRole } from "@/components/guards/RequireRole";
 import { CheckoutSteps, type CheckoutStep } from "@/components/checkout/CheckoutSteps";
 import { ShippingSelector } from "@/components/checkout/ShippingSelector";
@@ -23,12 +23,10 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { formatToken, formatUsd } from "@/lib/utils";
 import { type CartItem, useCartStore } from "@/stores/cart-store";
-import { useOrderStore } from "@/stores/order-store";
 import {
   type Order,
   type ShippingAddress,
   type ShippingOption,
-  OrderState,
 } from "@/lib/flowstate/types";
 
 interface SellerGroup {
@@ -46,16 +44,6 @@ const EMPTY_ADDRESS: ShippingAddress = {
   zip: "",
   country: "US",
 };
-
-function generateOrderId() {
-  return `order-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function randomTxHash() {
-  return `0x${Array.from({ length: 64 }, () =>
-    Math.floor(Math.random() * 16).toString(16)
-  ).join("")}`;
-}
 
 function usdToToken(usd: number) {
   return String(BigInt(Math.round(usd * 1e18)));
@@ -99,7 +87,6 @@ function CheckoutContent() {
     setShippingOption: saveShippingOption,
     clearCart,
   } = useCartStore();
-  const addOrder = useOrderStore((s) => s.addOrder);
 
   const [step, setStep] = useState<CheckoutStep>("shipping-address");
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress>(
@@ -183,77 +170,39 @@ function CheckoutContent() {
 
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        const orderId = generateOrderId();
-        const now = new Date().toISOString();
         const orderTotal = group.subtotal + shippingShare;
         const orderToken = usdToToken(orderTotal);
+        const response = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            buyer_wallet: address ?? "0x0000",
+            seller_id: group.sellerId,
+            seller_name: group.sellerName,
+            items: group.items.map(({ product, quantity }) => ({
+              product_id: product.id,
+              product_name: product.name,
+              quantity,
+              price_usd: product.price_usd,
+              image_url: product.image_url,
+            })),
+            total_usd: orderTotal,
+            total_token: orderToken,
+            shipping_option: { ...shippingOption, price_usd: shippingShare },
+            shipping_address: shippingAddress,
+          }),
+        });
 
-        const mockOrder: Order = {
-          id: orderId,
-          buyer_wallet: address ?? "0x0000",
-          seller_id: group.sellerId,
-          seller_name: group.sellerName,
-          items: group.items.map(({ product, quantity }) => ({
-            product_id: product.id,
-            product_name: product.name,
-            quantity,
-            price_usd: product.price_usd,
-            image_url: product.image_url,
-          })),
-          state: OrderState.ESCROWED,
-          total_usd: orderTotal,
-          total_token: orderToken,
-          shipping_option: { ...shippingOption, price_usd: shippingShare },
-          shipping_address: shippingAddress,
-          escrow: {
-            escrowId: `escrow-${orderId}`,
-            contractAddress:
-              process.env.NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS ?? "0x0",
-            tokenAddress: process.env.NEXT_PUBLIC_MOCK_RLUSD_ADDRESS ?? "0x0",
-            totalAmount: orderToken,
-            remainingAmount: orderToken,
-            txHash: randomTxHash(),
-            blockNumber: 12345678,
-            createdAt: now,
-          },
-          payout_schedule: [
-            {
-              state: OrderState.LABEL_CREATED,
-              percentageBps: 1500,
-              label: "Label Printed (15%)",
-            },
-            { state: OrderState.SHIPPED, percentageBps: 1500, label: "Shipped (15%)" },
-            {
-              state: OrderState.IN_TRANSIT,
-              percentageBps: 2000,
-              label: "In Transit (20%)",
-            },
-            {
-              state: OrderState.DELIVERED,
-              percentageBps: 3500,
-              label: "Delivered (35%)",
-            },
-            {
-              state: OrderState.FINALIZED,
-              percentageBps: 1500,
-              label: "Finalized (15%)",
-            },
-          ],
-          created_at: now,
-          updated_at: now,
-          state_history: [
-            {
-              from: OrderState.INITIATED,
-              to: OrderState.ESCROWED,
-              timestamp: now,
-              txHash: randomTxHash(),
-              triggeredBy: "buyer",
-            },
-          ],
-        };
+        if (!response.ok) {
+          throw new Error("Order creation failed");
+        }
 
-        addOrder(mockOrder);
-        newOrders.push(mockOrder);
+        const payload = (await response.json()) as { order?: Order };
+        if (!payload.order) {
+          throw new Error("Order creation failed");
+        }
+
+        newOrders.push(payload.order);
       }
 
       setCreatedOrders(newOrders);
@@ -478,16 +427,22 @@ function CheckoutContent() {
                   <Button variant="outline" onClick={() => setStep("shipping-option")}>
                     Back
                   </Button>
-                  <Button
+                  <Button variant="outline" disabled>
+                    Pay with Credit Card
+                  </Button>
+                  <Button variant="outline" disabled>
+                    Pay with Credit Card
+                  </Button>
+                  <Button variant="outline" disabled>
+                    Pay with PayPal
+                  </Button>
+                  <FlowStateCheckoutButton
                     onClick={handleConfirmAndPay}
                     disabled={!shippingOption || !isConnected || sellerGroups.length === 0}
+                    isConnected={isConnected}
+                    amountLabel={formatUsd(total)}
                     title={!isConnected ? "Connect your wallet to checkout" : undefined}
-                  >
-                    <Lock className="h-4 w-4" />
-                    {isConnected
-                      ? `Approve & Pay ${formatUsd(total)}`
-                      : "Connect Wallet to Checkout"}
-                  </Button>
+                  />
                 </div>
               </CardContent>
             </Card>

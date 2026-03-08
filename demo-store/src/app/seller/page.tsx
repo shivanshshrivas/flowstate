@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -21,16 +21,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  MOCK_PRODUCTS,
-  MOCK_PAYOUT_RECORDS,
-  MOCK_SELLER_METRICS,
-} from "@/lib/mock-data";
+  type Order,
+  type PayoutRecord,
+  type Product,
+  type Seller,
+  type SellerMetrics,
+  EscrowProgressBar,
+  OrderState,
+} from "@/lib/flowstate";
 import { XRPL_EXPLORER_URL } from "@/lib/constants";
-import { EscrowProgressBar, OrderState } from "@/lib/flowstate";
 import { formatDate, formatDateTime, formatUsd } from "@/lib/utils";
 import { useOrderStore } from "@/stores/order-store";
+import { useUserStore } from "@/stores/user-store";
 
-const SELLER_ID = "seller-001";
+const DEFAULT_SELLER_ID = "seller-001";
+const DEFAULT_SELLER_NAME = "Seller";
 
 const NEXT_STATES: Partial<Record<OrderState, OrderState>> = {
   [OrderState.ESCROWED]: OrderState.LABEL_CREATED,
@@ -51,11 +56,184 @@ const SELLER_FILTERS: { key: SellerOrderFilter; label: string }[] = [
   { key: "completed", label: "Completed" },
 ];
 
-function SellerDashboardContent() {
-  const { orders, advanceOrderState } = useOrderStore();
-  const [activeFilter, setActiveFilter] = useState<SellerOrderFilter>("all");
+function toBigIntToken(order: Order): bigint {
+  try {
+    return BigInt(order.total_token);
+  } catch {
+    return BigInt(Math.round(order.total_usd * 1e18));
+  }
+}
 
-  const sellerOrders = orders.filter((order) => order.seller_id === SELLER_ID);
+function deriveMetrics(orders: Order[]): SellerMetrics {
+  let totalRevenueToken = BigInt(0);
+  let pendingPayoutToken = BigInt(0);
+  let activeEscrows = 0;
+  let disputeCount = 0;
+  let fulfillmentHoursTotal = 0;
+  let fulfillmentSamples = 0;
+
+  for (const order of orders) {
+    const orderToken = toBigIntToken(order);
+    totalRevenueToken += orderToken;
+
+    if (
+      [
+        OrderState.INITIATED,
+        OrderState.ESCROWED,
+        OrderState.LABEL_CREATED,
+        OrderState.SHIPPED,
+        OrderState.IN_TRANSIT,
+      ].includes(order.state)
+    ) {
+      activeEscrows += 1;
+    }
+
+    if (order.state === OrderState.DISPUTED) {
+      disputeCount += 1;
+    }
+
+    const releasedBps = order.payout_schedule.reduce((sum, payout) => {
+      return payout.releasedAt ? sum + payout.percentageBps : sum;
+    }, 0);
+    const pendingBps = Math.max(0, 10000 - releasedBps);
+    pendingPayoutToken += (orderToken * BigInt(pendingBps)) / BigInt(10000);
+
+    const shippedTransition = order.state_history.find(
+      (transition) => transition.to === OrderState.SHIPPED
+    );
+    if (shippedTransition) {
+      const createdAtMs = Date.parse(order.created_at);
+      const shippedAtMs = Date.parse(shippedTransition.timestamp);
+      if (
+        Number.isFinite(createdAtMs) &&
+        Number.isFinite(shippedAtMs) &&
+        shippedAtMs >= createdAtMs
+      ) {
+        fulfillmentHoursTotal += (shippedAtMs - createdAtMs) / (1000 * 60 * 60);
+        fulfillmentSamples += 1;
+      }
+    }
+  }
+
+  const totalRevenueUsd = orders.reduce((sum, order) => sum + order.total_usd, 0);
+  const fulfillmentAvgHours =
+    fulfillmentSamples > 0 ? fulfillmentHoursTotal / fulfillmentSamples : 0;
+  const disputeRate = orders.length > 0 ? disputeCount / orders.length : 0;
+
+  return {
+    total_orders: orders.length,
+    total_revenue_usd: totalRevenueUsd,
+    total_revenue_token: totalRevenueToken.toString(),
+    fulfillment_avg_hours: fulfillmentAvgHours,
+    dispute_rate: disputeRate,
+    active_escrows: activeEscrows,
+    pending_payouts_token: pendingPayoutToken.toString(),
+  };
+}
+
+function derivePayouts(orders: Order[]): PayoutRecord[] {
+  const records: PayoutRecord[] = [];
+
+  for (const order of orders) {
+    const orderToken = toBigIntToken(order);
+    order.payout_schedule.forEach((payout, index) => {
+      if (!payout.releasedAt && !payout.txHash) {
+        return;
+      }
+
+      const amountToken =
+        payout.amountToken ??
+        ((orderToken * BigInt(payout.percentageBps)) / BigInt(10000)).toString();
+
+      records.push({
+        id: `${order.id}-${payout.state}-${index}`,
+        order_id: order.id,
+        state: payout.state,
+        amount_token: amountToken,
+        amount_usd: (order.total_usd * payout.percentageBps) / 10000,
+        tx_hash: payout.txHash ?? `pending-${order.id}-${index}`,
+        timestamp: payout.releasedAt ?? order.updated_at,
+      });
+    });
+  }
+
+  return records.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+}
+
+function SellerDashboardContent() {
+  const { user } = useUserStore();
+  const { orders, fetchOrders, advanceOrderState } = useOrderStore();
+  const [activeFilter, setActiveFilter] = useState<SellerOrderFilter>("all");
+  const [sellerId, setSellerId] = useState<string>(user?.seller_id ?? DEFAULT_SELLER_ID);
+  const [sellerName, setSellerName] = useState<string>(DEFAULT_SELLER_NAME);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSellerProfile() {
+      try {
+        const response = await fetch("/api/sellers?mine=true", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as { seller?: Seller | null };
+        if (cancelled || !payload.seller) return;
+
+        setSellerId(payload.seller.id);
+        setSellerName(payload.seller.business_name);
+      } catch {
+        if (!cancelled && user?.seller_id) {
+          setSellerId(user.seller_id);
+        }
+      }
+    }
+
+    loadSellerProfile();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.seller_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProducts() {
+      if (!sellerId) return;
+
+      setLoadingProducts(true);
+      try {
+        const response = await fetch(
+          `/api/products?seller_id=${encodeURIComponent(sellerId)}`,
+          { cache: "no-store" }
+        );
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as { products?: Product[] };
+        if (!cancelled) {
+          setProducts(payload.products ?? []);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingProducts(false);
+        }
+      }
+    }
+
+    loadProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [sellerId]);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const sellerOrders = useMemo(
+    () => orders.filter((order) => order.seller_id === sellerId),
+    [orders, sellerId]
+  );
+
   const filteredOrders = sellerOrders.filter((order) => {
     if (activeFilter === "needs_action") {
       return (
@@ -78,15 +256,17 @@ function SellerDashboardContent() {
     return true;
   });
 
-  const metrics = MOCK_SELLER_METRICS;
-  const products = MOCK_PRODUCTS.filter((product) => product.seller_id === SELLER_ID);
+  const metrics = useMemo(() => deriveMetrics(sellerOrders), [sellerOrders]);
+  const payoutRecords = useMemo(() => derivePayouts(sellerOrders), [sellerOrders]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-100">Seller Dashboard</h1>
-          <p className="mt-0.5 text-sm text-neutral-400">TechGear Co. | {SELLER_ID}</p>
+          <p className="mt-0.5 text-sm text-neutral-400">
+            {sellerName} | {sellerId}
+          </p>
         </div>
         <Link href="/seller/products">
           <Button size="sm" variant="outline">
@@ -211,6 +391,14 @@ function SellerDashboardContent() {
 
         <TabsContent value="products">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {loadingProducts && products.length === 0 && (
+              <Card>
+                <CardContent className="p-6 text-sm text-neutral-500">
+                  Loading products...
+                </CardContent>
+              </Card>
+            )}
+
             {products.map((product) => (
               <Card key={product.id}>
                 <div className="relative h-32 overflow-hidden rounded-t-xl">
@@ -232,6 +420,7 @@ function SellerDashboardContent() {
                 </CardContent>
               </Card>
             ))}
+
             <Card className="flex h-48 cursor-pointer items-center justify-center border-dashed transition-colors hover:border-neutral-600">
               <div className="text-center text-neutral-600">
                 <PlusCircle className="mx-auto mb-2 h-8 w-8" />
@@ -247,36 +436,40 @@ function SellerDashboardContent() {
               <CardTitle className="text-base">Payout History</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {MOCK_PAYOUT_RECORDS.map((payout) => (
-                  <div key={payout.id}>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-neutral-200">
-                          {payout.state.replace("_", " ")} | Order {payout.order_id}
-                        </p>
-                        <p className="mt-0.5 text-xs text-neutral-500">
-                          {formatDateTime(payout.timestamp)}
-                        </p>
+              {payoutRecords.length === 0 ? (
+                <p className="text-sm text-neutral-500">No payout releases yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {payoutRecords.map((payout) => (
+                    <div key={payout.id}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-neutral-200">
+                            {payout.state.replace("_", " ")} | Order {payout.order_id}
+                          </p>
+                          <p className="mt-0.5 text-xs text-neutral-500">
+                            {formatDateTime(payout.timestamp)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-semibold text-emerald-400">
+                            +{formatUsd(payout.amount_usd)}
+                          </p>
+                          <a
+                            href={`${XRPL_EXPLORER_URL}/tx/${payout.tx_hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-end gap-0.5 text-xs text-neutral-500 hover:text-neutral-300"
+                          >
+                            tx <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-emerald-400">
-                          +{formatUsd(payout.amount_usd)}
-                        </p>
-                        <a
-                          href={`${XRPL_EXPLORER_URL}/tx/${payout.tx_hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-end gap-0.5 text-xs text-neutral-500 hover:text-neutral-300"
-                        >
-                          tx <ExternalLink className="h-3 w-3" />
-                        </a>
-                      </div>
+                      <Separator className="mt-3" />
                     </div>
-                    <Separator className="mt-3" />
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -309,7 +502,7 @@ function SellerDashboardContent() {
                 icon: AlertTriangle,
                 label: "Dispute Rate",
                 value: `${(metrics.dispute_rate * 100).toFixed(1)}%`,
-                sub: "industry avg: 2.5%",
+                sub: "share of disputed orders",
                 color: "text-amber-400",
               },
               {

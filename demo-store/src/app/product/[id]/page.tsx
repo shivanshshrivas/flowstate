@@ -2,11 +2,11 @@ import { notFound } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, Package, Shield, Truck, Clock } from "lucide-react";
-import { MOCK_PRODUCTS } from "@/lib/mock-data";
 import { formatUsd } from "@/lib/utils";
 import { BuyerPayButton } from "@/components/products/BuyerPayButton";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { getProductByIdFromDatabase } from "@/lib/platform-data";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -14,7 +14,7 @@ interface PageProps {
 
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params;
-  const product = MOCK_PRODUCTS.find((p) => p.id === id);
+  const product = await getProductByIdFromDatabase(id);
 
   if (!product) notFound();
 
@@ -108,8 +108,4 @@ export default async function ProductPage({ params }: PageProps) {
       </div>
     </div>
   );
-}
-
-export function generateStaticParams() {
-  return MOCK_PRODUCTS.map((p) => ({ id: p.id }));
 }
