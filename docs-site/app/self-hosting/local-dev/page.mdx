@@ -1,0 +1,57 @@
+# Local Dev
+
+Use this path when you want the full FlowState stack running locally for development.
+
+## Prerequisites
+
+- Node.js 20+
+- PostgreSQL (or Supabase for the demo store)
+- A Shippo test API key
+- Optional: Redis for queue-based webhook delivery
+
+## Recommended Startup Order
+
+1. Set up databases (Supabase for demo store, Postgres for backend).
+2. Start the backend.
+3. Start the demo store.
+4. Optional: start the docs site.
+5. Optional: deploy contracts and add addresses to the demo store `.env.local`.
+
+## Backend
+
+```bash
+cd backend
+cp .env.example .env
+# Edit .env with DATABASE_URL, SHIPPO_KEY, and optionally REDIS_URL
+npm install
+npm run dev
+```
+
+The backend starts on `http://localhost:3001` by default.
+
+## Demo Store
+
+```bash
+cd demo-store
+cp .env.example .env.local
+# Edit .env.local with Supabase and contract addresses
+npm install
+npm run dev
+```
+
+The demo store starts on `http://localhost:3000`.
+
+## Docs Site
+
+```bash
+cd docs-site
+npm install
+npm run dev
+```
+
+## Notes
+
+- The backend fails fast if `DATABASE_URL` or `SHIPPO_KEY` are missing.
+- Redis is optional. Without it, cron jobs and webhook delivery run in fallback mode (inline `setInterval` and synchronous dispatch).
+- The demo store can render with mock data even if Supabase is not configured. It uses Zustand stores with localStorage persistence for cart state.
+- Contract addresses are loaded from environment variables. The demo store's checkout flow uses mock behavior when contracts are not configured.

@@ -1,0 +1,18 @@
+{
+  "name": "get-metrics",
+  "description": "Get performance metrics for the seller including revenue, order counts, and dispute rate",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "seller_id": {
+        "type": "string",
+        "description": "The seller's wallet address or ID (from SYSTEM_CONTEXT user_id)"
+      },
+      "period_days": {
+        "type": "number",
+        "description": "Number of days to look back (default 30)"
+      }
+    },
+    "required": ["seller_id"]
+  }
+}

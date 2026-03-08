@@ -1,0 +1,90 @@
+# Auth And API Keys
+
+Most FlowState API endpoints require `Authorization: Bearer <api_key>`.
+
+## Create Project (Bootstrap)
+
+This is the first call you make to set up your FlowState integration. No auth required.
+
+```http
+POST /api/v1/auth/projects/create
+```
+
+```json
+{
+  "name": "My Shop",
+  "owner_email": "owner@myshop.com",
+  "platform_fee_wallet": "0xYourPlatformWallet",
+  "platform_fee_bps": 250,
+  "contracts": {
+    "escrowStateMachine": "0x33136ca845ace5a4f8CC032793AF22eC024B2ee3",
+    "disputeResolver": "0x9A2C9B4CE17eE3ffD5C3Db97a04009381f457731"
+  }
+}
+```
+
+Successful response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "project_id": "fs_proj_...",
+    "api_key": "fs_live_..."
+  }
+}
+```
+
+**Store the raw API key immediately.** The backend stores only a SHA-256 hash of the key. You cannot retrieve the original key after this response.
+
+## Authenticated Requests
+
+Include the API key as a bearer token on all subsequent requests:
+
+```http
+Authorization: Bearer fs_live_...
+```
+
+## How Key Resolution Works
+
+The backend resolves your identity by:
+
+1. Extracting the first 16 characters as the key prefix
+2. SHA-256 hashing the full key
+3. Matching an active key record by prefix + hash
+4. Resolving the associated project ID
+
+All API calls are scoped to the project associated with your key.
+
+## Rotate API Key
+
+```http
+POST /api/v1/auth/api-keys/rotate
+Authorization: Bearer fs_live_...
+```
+
+Request body:
+
+```json
+{
+  "label": "2026-q1-rotation"
+}
+```
+
+Rotation **deactivates all previous keys** for that project and returns a new raw key. Update your environment variables immediately.
+
+## Auth Exceptions
+
+These endpoints do **not** require bearer auth:
+
+| Endpoint                               | Reason                              |
+| -------------------------------------- | ----------------------------------- |
+| `POST /api/v1/auth/projects/create`    | Bootstrap — no project exists yet   |
+| `POST /api/v1/shipping/webhook/shippo` | Inbound carrier webhook from Shippo |
+| `GET /health`                          | Health check                        |
+
+## Project Isolation
+
+- All data (orders, sellers, disputes, webhooks) is scoped to a single project
+- For `/platform/:projectId/*` routes, the backend returns `403` if the path `projectId` does not match the project resolved from your API key
+- You cannot access another project's data with your key

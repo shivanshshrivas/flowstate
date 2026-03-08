@@ -1,0 +1,38 @@
+# Redis And Queues
+
+Redis is **optional** in the FlowState backend. The system adapts its behavior based on whether `REDIS_URL` is set.
+
+## Without Redis
+
+If `REDIS_URL` is unset:
+
+- Webhook dispatch runs inline (synchronous, no retries)
+- Cron jobs (auto-finalize, dispute auto-resolve) run through `setInterval`
+- State transition processing happens inline
+- The backend still boots and is fully functional
+
+This is sufficient for local development and single-process deployments.
+
+## With Redis
+
+If `REDIS_URL` is set, the backend initializes BullMQ with three queue workers:
+
+| Queue              | Purpose                                                                                          | Concurrency | Retries | Backoff           |
+| ------------------ | ------------------------------------------------------------------------------------------------ | ----------- | ------- | ----------------- |
+| `state-transition` | Process shipping state advances, pin receipts to IPFS, advance blockchain state, release payouts | 5           | 3       | Exponential (10s) |
+| `webhook-delivery` | Deliver signed webhooks to registered endpoints                                                  | 10          | 5       | Exponential (5s)  |
+| `agent-routing`    | Route chat messages to Pinata AI agents                                                          | 3           | —       | —                 |
+
+Additional features with Redis:
+
+- Webhook delivery is rate-limited to 100 per minute
+- Cron jobs run as BullMQ repeatable jobs (more reliable than `setInterval`)
+- State transitions are processed asynchronously (better throughput under load)
+
+## Configuration
+
+```env
+REDIS_URL=redis://localhost:6379
+```
+
+No additional Redis configuration is needed. The backend handles queue setup automatically on startup.

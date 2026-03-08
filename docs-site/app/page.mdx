@@ -1,0 +1,101 @@
+import { Callout, Cards } from "nextra/components";
+
+export const metadata = {
+  description:
+    "Developer docs for @shivanshshrivas/flowstate — one-click crypto checkout, event-based escrow, and Shippo shipping tracking for e-commerce platforms.",
+};
+
+# FlowState Developer Docs
+
+`@shivanshshrivas/flowstate` is an npm package that gives e-commerce platforms:
+
+- **One-click crypto checkout** — a drop-in `PayButton` component that handles wallet connection, token approval, and escrow deposit
+- **Event-based escrow** — funds are locked on-chain via the `EscrowStateMachine` contract and released in stages as shipment milestones are reached
+- **Shippo shipping tracking** — real-time carrier tracking drives automatic state transitions and partial payouts
+- **Dashboard interfaces** — `OrderTracker` for buyers, seller dashboards for fulfillment, and admin analytics
+
+The package runs on the **XRPL EVM Sidechain** and uses **FLUSD** (a mock RLUSD stablecoin) for payments. The backend API gateway is housed in `backend/` and provides all order orchestration, webhook dispatch, and third-party bridge integrations.
+
+<Callout type="info">
+  These docs are sourced directly from the codebase in `backend/src/routes/*`
+  and `demo-store/src/lib/flowstate/*`. Roadmap items from
+  `.claude/architecture.md` are marked where they appear.
+</Callout>
+
+## Start Here
+
+<Cards className="fs-home-grid" num={2}>
+  <Cards.Card href="/quickstart" title="Quickstart">
+    Install the package and embed a crypto checkout button in five steps.
+  </Cards.Card>
+  <Cards.Card
+    href="/concepts/architecture-overview"
+    title="Architecture Overview"
+  >
+    How the package, API gateway, smart contracts, and shipping bridges connect.
+  </Cards.Card>
+  <Cards.Card href="/integration/frontend" title="Frontend Integration">
+    Add `FlowStateProvider`, `PayButton`, and `OrderTracker` to your storefront.
+  </Cards.Card>
+  <Cards.Card href="/reference/api-endpoints" title="API Endpoints">
+    Full `/api/v1` backend surface grouped by domain.
+  </Cards.Card>
+</Cards>
+
+## Integration Workflow
+
+1. Install `@shivanshshrivas/flowstate` in your storefront.
+2. Create a project and API key (`POST /api/v1/auth/projects/create`).
+3. Wrap your app with `FlowStateProvider` and supply contract addresses.
+4. Add `PayButton` to product or cart pages.
+5. Register a webhook endpoint (`POST /api/v1/webhooks/register`).
+6. Process state-change events from webhooks and display progress with `OrderTracker`.
+
+## Package Exports
+
+The package provides these primary exports:
+
+| Export                  | Kind      | Description                                                      |
+| ----------------------- | --------- | ---------------------------------------------------------------- |
+| `FlowStateProvider`     | Component | React context provider for project config and contract addresses |
+| `PayButton`             | Component | One-click Buy with FlowState button with wallet connection       |
+| `OrderTracker`          | Component | Visual timeline showing order state, payouts, and tx links       |
+| `useFlowState`          | Hook      | Access resolved config and contract addresses from context       |
+| `EscrowStateMachineAbi` | ABI       | Solidity ABI for the escrow contract                             |
+| `MockRLUSDAbi`          | ABI       | Solidity ABI for the FLUSD ERC-20 token                          |
+| `OrderState`            | Enum      | `INITIATED` through `FINALIZED` plus `DISPUTED`                  |
+| `DisputeStatus`         | Enum      | `OPEN`, `SELLER_RESPONDED`, `RESOLVED`, `AUTO_RESOLVED`          |
+
+## API Groups
+
+The backend gateway exposes eight route groups under `/api/v1`:
+
+- **Auth** — project creation and API key rotation
+- **Orders** — checkout lifecycle: create, select shipping, confirm escrow, advance, finalize
+- **Shipping** — Shippo rate shopping, tracking, inbound carrier webhook
+- **Sellers** — onboarding, order queues, metrics, payout history
+- **Disputes** — buyer dispute creation, seller response, admin resolution
+- **Platform** — analytics, seller risk views, gas cost estimates
+- **Webhooks** — destination registration and delivery logs
+- **Agents** — role-based AI chat routing (buyer/seller/admin)
+
+## Smart Contracts
+
+Three Solidity contracts are deployed on XRPL EVM Sidechain Testnet (chain ID `1449000`):
+
+| Contract               | Address                                      | Purpose                                                 |
+| ---------------------- | -------------------------------------------- | ------------------------------------------------------- |
+| **FLUSD**              | `0x257812213360Df9f3C19cAe9759B58cAcf39323d` | Mock stablecoin (ERC-20, 6 decimals) with public faucet |
+| **EscrowStateMachine** | `0x33136ca845ace5a4f8CC032793AF22eC024B2ee3` | 7-state escrow FSM with milestone payouts               |
+| **DisputeResolver**    | `0x9A2C9B4CE17eE3ffD5C3Db97a04009381f457731` | Dispute lifecycle with auto-resolve after 72h           |
+
+## Reference Material
+
+- [API Endpoints](/reference/api-endpoints)
+- [Events And Webhooks](/reference/events-and-webhooks)
+- [Troubleshooting](/reference/troubleshooting)
+
+## Internal / Legacy Docs
+
+Operational self-hosting docs are available under
+[Internal Ops (Legacy)](/self-hosting/local-dev) for team contributors running the full stack locally.

@@ -1,0 +1,41 @@
+# Dev Workflow
+
+Use a narrow workflow so changes don't accidentally mix architecture work, API work, and frontend work in one patch.
+
+## Recommended Flow
+
+1. Read the relevant docs page and inspect the local code path.
+2. Change one subsystem at a time.
+3. Update docs in the same patch when behavior or setup changes.
+4. Verify the affected package with its local build or test command.
+
+## Good Boundaries
+
+| Change Scope          | What To Include                                 |
+| --------------------- | ----------------------------------------------- |
+| Backend API change    | Backend code + backend tests                    |
+| Contract change       | Contract code + contract tests                  |
+| Demo store UI change  | Demo store code + demo store build              |
+| Package export change | `demo-store/src/lib/flowstate/*` + related docs |
+| Docs update           | MDX files + supporting env/README changes       |
+
+## Docs Authoring
+
+- Add or edit docs under `docs-site/app/`.
+- Create a `page.mdx` file for each route you want to expose.
+- Update the nearest `_meta.js` file so the page appears in the correct sidebar position.
+- Run `cd docs-site && npm run build` before pushing docs changes.
+- The build includes a Pagefind search index step (`postbuild`).
+
+## Package Name
+
+The npm package is `@shivanshshrivas/flowstate`. When referencing it in docs, code examples, or import statements, use this exact name. The package source lives in `demo-store/src/lib/flowstate/` as a local mirror.
+
+## Current Gotchas
+
+- The architecture doc (`.claude/architecture.md`) describes the intended end-state, not just current code.
+- The backend and contract payout defaults are not fully aligned:
+  - Backend: `[1500, 1500, 3500, 3500]` (4-step)
+  - Contract: `[1500, 1500, 2000, 3500, 1500]` (5-step)
+- The Pinata and blockchain bridges are stubs. Docs should not claim live IPFS pinning or on-chain settlement through the API gateway.
+- The Shippo bridge is the only fully live external integration.

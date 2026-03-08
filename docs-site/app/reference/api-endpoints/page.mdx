@@ -1,0 +1,324 @@
+import { Callout } from "nextra/components";
+
+# API Endpoints
+
+Base URL: `https://api.flowstate.xyz`
+
+All REST routes are mounted under `/api/v1` except `/health` and `/ws`.
+
+## Auth Model
+
+Bearer auth required for all endpoints below except those listed in [Auth Exceptions](#auth-exceptions).
+
+```http
+Authorization: Bearer fs_live_...
+```
+
+## Auth
+
+### `POST /api/v1/auth/projects/create`
+
+Create a new project and get your first API key. **No auth required.**
+
+```json
+{
+  "name": "My Shop",
+  "owner_email": "owner@myshop.com",
+  "platform_fee_wallet": "0xYourWallet",
+  "platform_fee_bps": 250,
+  "contracts": {
+    "escrowStateMachine": "0x33136ca845ace5a4f8CC032793AF22eC024B2ee3",
+    "disputeResolver": "0x9A2C9B4CE17eE3ffD5C3Db97a04009381f457731"
+  }
+}
+```
+
+Returns `project_id` and `api_key`.
+
+### `POST /api/v1/auth/api-keys/rotate`
+
+Deactivates all existing keys for the project and issues a new one.
+
+```json
+{
+  "label": "2026-q1-rotation"
+}
+```
+
+## Orders
+
+### `POST /api/v1/orders/create`
+
+Create a new order. Returns shipping rate options from Shippo and the escrow target address.
+
+```json
+{
+  "seller_id": "fs_sel_...",
+  "buyer_wallet": "0xBuyer...",
+  "seller_wallet": "0xSeller...",
+  "address_from": {
+    "name": "Seller",
+    "street1": "...",
+    "city": "...",
+    "state": "...",
+    "zip": "...",
+    "country": "US"
+  },
+  "address_to": {
+    "name": "Buyer",
+    "street1": "...",
+    "city": "...",
+    "state": "...",
+    "zip": "...",
+    "country": "US"
+  },
+  "parcel": {
+    "length": "10",
+    "width": "8",
+    "height": "4",
+    "weight": "2",
+    "distance_unit": "in",
+    "mass_unit": "lb"
+  },
+  "items": [
+    {
+      "external_id": "prod_1",
+      "name": "Widget",
+      "quantity": 1,
+      "price_usd": "29.99",
+      "weight_oz": 8
+    }
+  ]
+}
+```
+
+### `POST /api/v1/orders/:id/select-shipping`
+
+Buyer selects a shipping rate. Backend purchases a Shippo label and pins it to IPFS.
+
+```json
+{
+  "rate_id": "rate_..."
+}
+```
+
+### `POST /api/v1/orders/:id/confirm-escrow`
+
+Confirm the on-chain escrow deposit. Backend verifies the transaction and transitions to `ESCROWED`.
+
+```json
+{
+  "tx_hash": "0x..."
+}
+```
+
+### `POST /api/v1/orders/:id/confirm-label-printed`
+
+Seller confirms label was printed. Advances state to `LABEL_CREATED` and releases 15% payout.
+
+```json
+{
+  "seller_wallet": "0xSeller..."
+}
+```
+
+### `POST /api/v1/orders/:id/finalize`
+
+Release the holdback tranche (minus platform fee) after the grace period. Can also be triggered by the auto-finalize cron.
+
+### `GET /api/v1/orders/:id`
+
+Get full order details including items, state history, escrow info, and payout schedule.
+
+## Shipping
+
+### `POST /api/v1/shipping/webhook/shippo`
+
+Inbound webhook from Shippo for `track_updated` events. **No auth required.** Processes carrier status changes and advances order states automatically.
+
+### `GET /api/v1/shipping/rates`
+
+Get shipping rates from Shippo. Query parameters must be JSON-encoded strings:
+
+```
+GET /api/v1/shipping/rates?from={"name":"...","street1":"...","city":"...","state":"...","zip":"...","country":"US"}&to={...}&parcel={...}
+```
+
+### `GET /api/v1/shipping/track/:orderId`
+
+Get live tracking status from Shippo for a specific order.
+
+## Sellers
+
+### `POST /api/v1/sellers/onboard`
+
+Register a new seller with custom payout configuration.
+
+```json
+{
+  "wallet_address": "0xSeller...",
+  "business_name": "Seller Co",
+  "business_email": "seller@example.com",
+  "payout_config": {
+    "immediate_bps": 1500,
+    "milestone_bps": 5000,
+    "holdback_bps": 3500
+  }
+}
+```
+
+<Callout type="info">
+  The `payout_config` values must sum to 10000 bps (100%).
+</Callout>
+
+### `GET /api/v1/sellers/:id/orders`
+
+Paginated list of seller orders. Optional query: `status=ESCROWED&page=1&limit=20`.
+
+### `GET /api/v1/sellers/:id/metrics`
+
+Seller analytics: total orders, revenue, average fulfillment time, dispute rate, reputation score. Optional query: `period=30`.
+
+### `GET /api/v1/sellers/:id/payouts`
+
+Paginated payout history for a seller. Optional query: `page=1&limit=20`.
+
+## Disputes
+
+### `POST /api/v1/disputes/create`
+
+Buyer opens a dispute on a `DELIVERED` order (within grace period). Freezes remaining escrow funds.
+
+```json
+{
+  "order_id": "fs_ord_...",
+  "description": "Item arrived damaged",
+  "evidence_cid": "QmIpfsHash..."
+}
+```
+
+### `POST /api/v1/disputes/:id/respond`
+
+Seller responds to a dispute. Can accept (full refund) or contest with evidence.
+
+```json
+{
+  "action": "contest",
+  "description": "Item was in perfect condition when shipped",
+  "evidence_cid": "QmSellerEvidence..."
+}
+```
+
+### `POST /api/v1/disputes/:id/resolve`
+
+Admin resolves a disputed order.
+
+```json
+{
+  "outcome": "split",
+  "refund_bps": 5000,
+  "notes": "Partial damage confirmed"
+}
+```
+
+Outcome values: `refund` (100% buyer), `release` (100% seller), `split` (custom `refund_bps`).
+
+## Platform
+
+### `GET /api/v1/platform/:projectId/analytics`
+
+Project-wide analytics: orders by status, revenue (USD + token), dispute counts, seller counts.
+
+Optional query: `period=7d|30d|90d`.
+
+### `GET /api/v1/platform/:projectId/sellers`
+
+List sellers with order and dispute counts. Filter flagged sellers (>5% dispute rate).
+
+Optional query: `flagged=true|false&page=1&limit=20`.
+
+### `GET /api/v1/platform/:projectId/gas-costs`
+
+Estimated gas costs per transaction type in XRP.
+
+## Webhooks
+
+### `POST /api/v1/webhooks/register`
+
+Register a webhook destination. Returns a `secret` for HMAC signature verification.
+
+```json
+{
+  "url": "https://myshop.com/api/webhooks/flowstate",
+  "events": ["order.state_changed", "dispute.created", "dispute.resolved"]
+}
+```
+
+### `GET /api/v1/webhooks/logs`
+
+Paginated webhook delivery logs. Optional query: `page=1&limit=20`.
+
+## Agents
+
+### `POST /api/v1/agents/chat`
+
+Route a chat message to the appropriate Pinata AI agent based on role.
+
+```json
+{
+  "role": "buyer",
+  "user_id": "user_123",
+  "message": "Where is my order?"
+}
+```
+
+Roles: `buyer`, `seller`, `admin`.
+
+## Non-Versioned Endpoints
+
+### `GET /health`
+
+Returns `{ "status": "ok" }`.
+
+### `GET /ws`
+
+WebSocket upgrade endpoint. Send auth as first message within 5 seconds:
+
+```json
+{ "type": "auth", "token": "fs_live_..." }
+```
+
+Supports `ping`/`pong` keepalive. Receives project-scoped real-time events.
+
+## Auth Exceptions
+
+These endpoints do not require bearer auth:
+
+- `POST /api/v1/auth/projects/create`
+- `POST /api/v1/shipping/webhook/shippo`
+- `GET /health`
+
+## Response Conventions
+
+Successful responses:
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+Error responses:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "..."
+  }
+}
+```
+
+Common error codes: `MISSING_API_KEY`, `INVALID_API_KEY`, `VALIDATION_ERROR`, `NOT_FOUND`, `INVALID_STATE_TRANSITION`, `FORBIDDEN`.

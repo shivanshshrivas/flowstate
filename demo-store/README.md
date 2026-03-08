@@ -2,6 +2,8 @@
 
 A Next.js demo e-commerce storefront showcasing the FlowState blockchain escrow payment gateway on XRPL EVM Sidechain.
 
+For the repo-wide developer docs, start at `../docs/index.md`.
+
 ## What This Demos
 
 - **Buyer flow**: Browse products → Connect MetaMask → Checkout with escrow → Track order through 7 states
@@ -13,7 +15,7 @@ A Next.js demo e-commerce storefront showcasing the FlowState blockchain escrow 
 
 ```bash
 cd demo-store
-cp .env.example .env.local
+copy .env.example .env.local
 npm install
 npm run dev
 ```
@@ -25,9 +27,11 @@ Open http://localhost:3000.
 | Variable | Required | Description |
 |---|---|---|
 | `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` | No* | WalletConnect project ID |
+| `NEXT_PUBLIC_SITE_URL` | No* | Base URL used by auth redirects |
 | `NEXT_PUBLIC_SUPABASE_URL` | No* | Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | No* | Supabase anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | No* | Supabase service role key |
+| `FLOWSTATE_WEBHOOK_SECRET` | No* | Shared secret for the demo webhook receiver |
 | `NEXT_PUBLIC_MOCK_RLUSD_ADDRESS` | No* | Deployed MockRLUSD contract address |
 | `NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS` | No* | EscrowStateMachine address |
 | `NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS` | No* | DisputeResolver address |
@@ -71,7 +75,7 @@ src/
 When the npm package ships, find all gateway imports:
 
 ```bash
-grep -r "@/lib/flowstate" src/ --include="*.ts" --include="*.tsx"
+rg "@/lib/flowstate" src/
 ```
 
 Replace with `@flowstate/gateway`. The export surface is identical.

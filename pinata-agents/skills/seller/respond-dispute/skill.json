@@ -1,0 +1,27 @@
+{
+  "name": "respond-dispute",
+  "description": "Respond to a buyer dispute by accepting or contesting it with evidence",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "seller_id": {
+        "type": "string",
+        "description": "The seller's wallet address or ID (from SYSTEM_CONTEXT user_id)"
+      },
+      "dispute_id": {
+        "type": "string",
+        "description": "The dispute ID to respond to"
+      },
+      "action": {
+        "type": "string",
+        "description": "Whether to accept or contest the dispute",
+        "enum": ["accept", "contest"]
+      },
+      "evidence": {
+        "type": "string",
+        "description": "Evidence or explanation (required when action is contest)"
+      }
+    },
+    "required": ["seller_id", "dispute_id", "action"]
+  }
+}

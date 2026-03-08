@@ -1,0 +1,137 @@
+# Backend Webhooks
+
+Use webhooks to sync order state transitions, dispute events, and payout information into your platform database.
+
+## 1. Register Destination
+
+```http
+POST /api/v1/webhooks/register
+Authorization: Bearer fs_live_...
+```
+
+```json
+{
+  "url": "https://your-app.example.com/api/webhooks/flowstate",
+  "events": ["order.state_changed", "dispute.created", "dispute.resolved"]
+}
+```
+
+Response includes:
+
+| Field             | Description                                                      |
+| ----------------- | ---------------------------------------------------------------- |
+| `registration_id` | Unique ID for this webhook registration                          |
+| `secret`          | HMAC secret for signature verification — **persist immediately** |
+| `url`             | Your registered endpoint                                         |
+| `events`          | Event filter list                                                |
+
+## 2. Verify Signature In Handler
+
+Every webhook delivery is signed with HMAC-SHA256 using the secret from registration.
+
+```ts
+import crypto from "node:crypto";
+
+function verifyFlowStateSignature(
+  rawBody: string,
+  header: string | null,
+  secret: string,
+): boolean {
+  if (!header?.startsWith("sha256=")) return false;
+  const received = header.slice("sha256=".length);
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+}
+```
+
+Verify against the **raw request body string**, not re-serialized JSON.
+
+## 3. Process Event Payload
+
+```json
+{
+  "event": "order.state_changed",
+  "data": {
+    "order_id": "fs_ord_abc123",
+    "previous_state": "LABEL_CREATED",
+    "new_state": "SHIPPED",
+    "tx_hash": "0x..."
+  },
+  "timestamp": "2026-03-07T12:00:00.000Z"
+}
+```
+
+### Event Types
+
+| Event                 | Payload `data` fields                                |
+| --------------------- | ---------------------------------------------------- |
+| `order.state_changed` | `order_id`, `previous_state`, `new_state`, `tx_hash` |
+| `dispute.created`     | `dispute_id`, `order_id`, `buyer_evidence_cid`       |
+| `dispute.resolved`    | `dispute_id`, `order_id`, `outcome`, `refund_bps`    |
+
+### Handler Rules
+
+- **Verify** the `X-FlowState-Signature` header before trusting payload data.
+- **Branch** on the `event` field to route processing logic.
+- **Idempotent writes** — key by `event` + `order_id` or `dispute_id` to handle redeliveries.
+- **Return `2xx`** only after durable processing (e.g., database write committed).
+- **Ignore unknown events** — new event types may be added without notice.
+
+## 4. Example: Next.js API Route Handler
+
+```ts
+// app/api/webhooks/flowstate/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import crypto from "node:crypto";
+
+const WEBHOOK_SECRET = process.env.FLOWSTATE_WEBHOOK_SECRET!;
+
+export async function POST(req: NextRequest) {
+  const rawBody = await req.text();
+  const signature = req.headers.get("x-flowstate-signature");
+
+  if (!verifyFlowStateSignature(rawBody, signature, WEBHOOK_SECRET)) {
+    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  }
+
+  const payload = JSON.parse(rawBody);
+
+  switch (payload.event) {
+    case "order.state_changed":
+      await updateOrderState(payload.data.order_id, payload.data.new_state);
+      break;
+    case "dispute.created":
+      await flagOrderDisputed(payload.data.order_id);
+      break;
+    case "dispute.resolved":
+      await resolveDispute(payload.data.dispute_id, payload.data.outcome);
+      break;
+  }
+
+  return NextResponse.json({ received: true });
+}
+```
+
+## Retry Behavior
+
+| Mode   | Condition           | Behavior                                                                                                         |
+| ------ | ------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Queue  | `REDIS_URL` is set  | BullMQ retries up to 5 attempts with exponential backoff (starting at 5s). Concurrency: 10. Rate limit: 100/min. |
+| Inline | `REDIS_URL` not set | Synchronous in-process dispatch. No retries on failure.                                                          |
+
+All delivery attempts (success or failure) are logged in the `webhook_logs` table with HTTP status and response body.
+
+## View Delivery Logs
+
+```http
+GET /api/v1/webhooks/logs?page=1&limit=20
+Authorization: Bearer fs_live_...
+```
+
+## Related
+
+- [Webhook Model](/concepts/webhook-model) — architecture and delivery semantics
+- [Events And Webhooks](/reference/events-and-webhooks) — full event reference

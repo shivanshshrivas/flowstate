@@ -1,0 +1,53 @@
+# Repo Structure
+
+Use this map before making cross-cutting changes across the monorepo.
+
+## Top-Level Directories
+
+| Directory             | Purpose                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------- |
+| `backend/`            | Fastify API gateway — Postgres, BullMQ queues, cron, events, WebSocket, tests                     |
+| `demo-store/`         | Next.js storefront — local mirror of `@shivanshshrivas/flowstate` package, mock data, auth routes |
+| `packages/contracts/` | Hardhat project — FLUSD, EscrowStateMachine, DisputeResolver (Solidity)                           |
+| `docs-site/`          | Nextra documentation app (this site)                                                              |
+| `docs/`               | Older architecture notes including `project-breakdown.md`                                         |
+| `mcp-agents/`         | MCP agent workspace                                                                               |
+| `pinata/`             | Pinata IPFS integration utility                                                                   |
+| `pinata-agents/`      | Pinata AI agent integration (WebSocket agents, skills, mock server)                               |
+| `pinata-mcp/`         | Pinata MCP bridge                                                                                 |
+| `shippo/`             | Standalone Shippo tracking utility                                                                |
+
+## Backend Shape (`backend/src/`)
+
+| Folder        | Contents                                                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `routes/`     | Fastify route handlers: `auth`, `orders`, `shipping`, `sellers`, `disputes`, `platform`, `webhooks`, `agents`              |
+| `services/`   | Business logic: `order`, `shipping`, `seller`, `dispute`, `payout`, `auth`, `platform`, `webhook`, `webhook-mgmt`, `agent` |
+| `bridges/`    | External integrations: `shippo.bridge` (live), `pinata.bridge` (stub), `blockchain.bridge` (stub)                          |
+| `db/`         | Database types and access (`types.ts`)                                                                                     |
+| `queue/`      | BullMQ workers: `state-transition`, `webhook-delivery`, `agent-routing`                                                    |
+| `ws/`         | WebSocket server with project-scoped broadcast                                                                             |
+| `cron/`       | Scheduled tasks: auto-finalize (15 min), dispute auto-resolve (30 min)                                                     |
+| `events/`     | Typed event emitter singleton for internal event bus                                                                       |
+| `middleware/` | Auth (API key), caller identity, ownership validation, error handler                                                       |
+| `config/`     | Constants (order states, payout defaults, timers) and Zod env validation                                                   |
+| `utils/`      | ID generators (`fs_proj_`, `fs_ord_`, etc.), currency conversion, crypto (SHA-256, HMAC)                                   |
+
+## Demo Store Shape (`demo-store/src/`)
+
+| Folder           | Contents                                                                                           |
+| ---------------- | -------------------------------------------------------------------------------------------------- |
+| `app/`           | Next.js pages: home, product, cart, orders, seller dashboard, admin dashboard, auth, faucet        |
+| `components/`    | UI components: checkout overlay, shipping selector, order cards, product grid, layout, guards      |
+| `lib/flowstate/` | **Package mirror** — `FlowStateProvider`, `PayButton`, `OrderTracker`, hooks, types, contract ABIs |
+| `lib/`           | Constants (chain config, contract addresses), wagmi config, Supabase client, mock data, utils      |
+| `stores/`        | Zustand stores: `order-store` (order state management), `cart-store` (localStorage-persisted cart) |
+
+## Contracts Shape (`packages/contracts/`)
+
+| Folder              | Contents                                                                       |
+| ------------------- | ------------------------------------------------------------------------------ |
+| `contracts/`        | Solidity sources: `FLUSD.sol`, `EscrowStateMachine.sol`, `DisputeResolver.sol` |
+| `ignition/modules/` | Hardhat Ignition deployment modules                                            |
+| `scripts/`          | Deployment, seeding, and demo scripts                                          |
+| `test/`             | Hardhat test suite                                                             |

@@ -1,0 +1,19 @@
+{
+  "name": "list-my-orders",
+  "description": "List all orders for the current buyer, optionally filtered by status",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "buyer_wallet": {
+        "type": "string",
+        "description": "The buyer's Ethereum wallet address (from SYSTEM_CONTEXT user_id)"
+      },
+      "status": {
+        "type": "string",
+        "description": "Filter by order state",
+        "enum": ["INITIATED", "ESCROWED", "LABEL_CREATED", "SHIPPED", "IN_TRANSIT", "DELIVERED", "FINALIZED", "DISPUTED"]
+      }
+    },
+    "required": ["buyer_wallet"]
+  }
+}

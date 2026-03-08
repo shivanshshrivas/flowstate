@@ -1,0 +1,49 @@
+import { Callout } from "nextra/components";
+
+# Database
+
+The repo uses two separate database concerns that should not be confused.
+
+## Demo Store Database (Supabase)
+
+The demo store expects a Supabase project providing auth and these tables:
+
+- `public.users` — user profiles with wallet addresses and roles
+- `public.sellers` — seller business info and payout config
+- `public.products` — product catalog
+- `public.platform_config` — platform-level settings
+- `public.webhook_events` — webhook event log
+
+Run the seed SQL to create these tables:
+
+```bash
+# Paste the contents of demo-store/scripts/seed.sql into the Supabase SQL editor
+```
+
+## Backend Database (Postgres)
+
+The backend connects directly to PostgreSQL via the `postgres` driver (no ORM). It manages its own operational tables:
+
+| Table                   | Purpose                                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------------------------ |
+| `projects`              | Multi-tenant project registry with fee wallets and contract addresses                            |
+| `api_keys`              | Hashed API keys with prefix-based lookup                                                         |
+| `sellers`               | Seller profiles with wallet, business info, carrier accounts, payout config, reputation          |
+| `orders`                | Full order state including Shippo shipment IDs, tracking, escrow tx, IPFS CIDs, state timestamps |
+| `order_items`           | Line items with external IDs, dimensions, weight                                                 |
+| `payouts`               | Recorded payouts with token amounts, tx hash, IPFS receipt CID                                   |
+| `disputes`              | Buyer/seller evidence CIDs, frozen amounts, resolution type, deadlines                           |
+| `webhook_registrations` | Registered webhook URLs with secrets and event filters                                           |
+| `webhook_logs`          | Delivery logs with HTTP status and response body                                                 |
+
+Backend types are defined in `backend/src/db/types.ts`.
+
+<Callout type="warning">
+  There is no migration tool wired into the backend. Schema creation must be
+  handled manually before deployment. Use the type definitions in
+  `backend/src/db/types.ts` as the authoritative schema reference.
+</Callout>
+
+## Important Distinction
+
+The demo store Supabase schema and the backend operational schema are completely separate databases. One seed script does **not** cover both. Document and manage them independently.

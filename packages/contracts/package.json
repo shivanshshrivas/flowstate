@@ -2,6 +2,13 @@
   "name": "contracts",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "build": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:testnet": "hardhat ignition deploy --network xrplEvmTestnet ignition/modules/FullDeploy.ts",
+    "seed:testnet": "hardhat run scripts/seed.ts --network xrplEvmTestnet",
+    "demo:testnet": "hardhat run scripts/demo-flow.ts --network xrplEvmTestnet"
+  },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^4.0.6",
     "@nomicfoundation/hardhat-ignition": "^3.0.9",

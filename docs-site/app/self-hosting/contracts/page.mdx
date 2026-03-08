@@ -1,0 +1,73 @@
+import { Callout } from "nextra/components";
+
+# Contracts
+
+The XRPL EVM smart contracts live in `packages/contracts/`.
+
+## Setup
+
+```bash
+cd packages/contracts
+cp .env.example .env
+# Add your deployer private key and RPC URL
+npm install
+```
+
+## Commands
+
+```bash
+npm run build          # Compile contracts with Hardhat
+npm test               # Run Hardhat test suite
+npm run deploy:testnet # Deploy to XRPL EVM testnet
+npm run seed:testnet   # Seed contracts with test data
+npm run demo:testnet   # Run demo interaction script
+```
+
+## Network
+
+| Setting  | Value                                  |
+| -------- | -------------------------------------- |
+| RPC      | `https://rpc.testnet.xrplevm.org`      |
+| Chain ID | `1449000`                              |
+| Explorer | `https://explorer.testnet.xrplevm.org` |
+
+## Deployed Contracts (Testnet)
+
+| Contract               | Address                                      | Description                                                                              |
+| ---------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **FLUSD**              | `0x257812213360Df9f3C19cAe9759B58cAcf39323d` | Mock RLUSD stablecoin, ERC-20 with 6 decimals, public faucet (50k per call, 1h cooldown) |
+| **EscrowStateMachine** | `0x33136ca845ace5a4f8CC032793AF22eC024B2ee3` | 7-state escrow FSM with milestone payouts `[1500, 1500, 2000, 3500, 1500]` bps           |
+| **DisputeResolver**    | `0x9A2C9B4CE17eE3ffD5C3Db97a04009381f457731` | Dispute lifecycle: 72h seller response, admin resolution, auto-resolve                   |
+
+## Contract Details
+
+### FLUSD
+
+- ERC-20 with `"Flow USD"` name, `"FLUSD"` symbol, 6 decimals
+- `faucet()` — public, mints 50,000 FLUSD, 1-hour cooldown per address
+- `mint(to, amount)` — owner only
+
+### EscrowStateMachine
+
+- `createEscrow(orderId, buyer, seller, token, amount, payoutBps[5])` — locks tokens, releases first tranche
+- `advanceState(escrowId)` — moves to next state, releases corresponding payout
+- `finalize(escrowId)` — releases holdback minus platform fee after grace period
+- `initiateDispute(escrowId, evidenceCid)` — freezes funds, sets state to DISPUTED
+- `executeResolution(escrowId, refundBps)` — called by DisputeResolver only
+- Owner config: `setOperator`, `setDisputeResolver`, `setPlatformFeeWallet`, `setPlatformFeeBps` (max 10%), `setDefaultGracePeriod`, `pause`/`unpause`
+
+### DisputeResolver
+
+- `createDispute(escrowId, buyerEvidenceCid)` — opens dispute, freezes escrow
+- `respondToDispute(disputeId, sellerEvidenceCid)` — seller submits evidence
+- `resolveDispute(disputeId, outcome, refundBps)` — admin resolves
+- `autoResolve(disputeId)` — anyone can call after 72h seller window expires
+
+## Current Integration State
+
+<Callout type="warning">
+  The smart contracts are real and deployed. However, the backend blockchain
+  bridge (`backend/src/bridges/blockchain.bridge.ts`) is still a stub that
+  returns mock transaction hashes. The demo store uses mock checkout behavior.
+  Do not assume the API server is performing real on-chain settlement.
+</Callout>

@@ -1,0 +1,27 @@
+{
+  "name": "file-dispute",
+  "description": "File a dispute against an order for a damaged, wrong, or missing item — freezes remaining escrow and notifies the seller",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "buyer_wallet": {
+        "type": "string",
+        "description": "The buyer's Ethereum wallet address (from SYSTEM_CONTEXT user_id)"
+      },
+      "order_id": {
+        "type": "string",
+        "description": "The order ID to dispute"
+      },
+      "reason": {
+        "type": "string",
+        "description": "The dispute reason",
+        "enum": ["item_not_received", "item_damaged", "item_not_as_described", "wrong_item"]
+      },
+      "description": {
+        "type": "string",
+        "description": "Detailed description of the issue (minimum 20 characters)"
+      }
+    },
+    "required": ["buyer_wallet", "order_id", "reason", "description"]
+  }
+}

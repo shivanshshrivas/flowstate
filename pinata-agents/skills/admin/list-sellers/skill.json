@@ -1,0 +1,22 @@
+{
+  "name": "list-sellers",
+  "description": "List all sellers registered on the platform with their status and key metrics",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "project_id": {
+        "type": "string",
+        "description": "The platform project ID (from SYSTEM_CONTEXT user_id)"
+      },
+      "page": {
+        "type": "number",
+        "description": "Page number (default 1)"
+      },
+      "limit": {
+        "type": "number",
+        "description": "Results per page (default 20, max 100)"
+      }
+    },
+    "required": ["project_id"]
+  }
+}
