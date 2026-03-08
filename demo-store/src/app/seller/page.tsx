@@ -1,23 +1,34 @@
 "use client";
 
-import { RequireRole } from "@/components/guards/RequireRole";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
-import {
-  Package, TrendingUp, DollarSign, Clock, AlertTriangle,
-  Download, CheckCircle, ExternalLink, PlusCircle
-} from "lucide-react";
-import { MOCK_ORDERS, MOCK_SELLER_METRICS, MOCK_PAYOUT_RECORDS, MOCK_PRODUCTS } from "@/lib/mock-data";
-import { formatUsd, formatDate, formatDateTime } from "@/lib/utils";
-import { XRPL_EXPLORER_URL } from "@/lib/constants";
+import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  Download,
+  ExternalLink,
+  Package,
+  PlusCircle,
+  TrendingUp,
+} from "lucide-react";
+import { RequireRole } from "@/components/guards/RequireRole";
+import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  MOCK_PRODUCTS,
+  MOCK_PAYOUT_RECORDS,
+  MOCK_SELLER_METRICS,
+} from "@/lib/mock-data";
+import { XRPL_EXPLORER_URL } from "@/lib/constants";
+import { EscrowProgressBar, OrderState } from "@/lib/flowstate";
+import { formatDate, formatDateTime, formatUsd } from "@/lib/utils";
 import { useOrderStore } from "@/stores/order-store";
-import { OrderState } from "@/lib/flowstate/types";
 
 const SELLER_ID = "seller-001";
 
@@ -31,18 +42,51 @@ const ACTION_LABELS: Partial<Record<OrderState, string>> = {
   [OrderState.LABEL_CREATED]: "Confirm Shipped",
 };
 
+type SellerOrderFilter = "all" | "needs_action" | "in_transit" | "completed";
+
+const SELLER_FILTERS: { key: SellerOrderFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "needs_action", label: "Needs Action" },
+  { key: "in_transit", label: "In Transit" },
+  { key: "completed", label: "Completed" },
+];
+
 function SellerDashboardContent() {
   const { orders, advanceOrderState } = useOrderStore();
-  const sellerOrders = orders.filter((o) => o.seller_id === SELLER_ID);
+  const [activeFilter, setActiveFilter] = useState<SellerOrderFilter>("all");
+
+  const sellerOrders = orders.filter((order) => order.seller_id === SELLER_ID);
+  const filteredOrders = sellerOrders.filter((order) => {
+    if (activeFilter === "needs_action") {
+      return (
+        order.state === OrderState.ESCROWED ||
+        order.state === OrderState.LABEL_CREATED
+      );
+    }
+    if (activeFilter === "in_transit") {
+      return (
+        order.state === OrderState.SHIPPED ||
+        order.state === OrderState.IN_TRANSIT
+      );
+    }
+    if (activeFilter === "completed") {
+      return (
+        order.state === OrderState.DELIVERED ||
+        order.state === OrderState.FINALIZED
+      );
+    }
+    return true;
+  });
+
   const metrics = MOCK_SELLER_METRICS;
-  const products = MOCK_PRODUCTS.filter((p) => p.seller_id === SELLER_ID);
+  const products = MOCK_PRODUCTS.filter((product) => product.seller_id === SELLER_ID);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center justify-between mb-6">
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-neutral-100">Seller Dashboard</h1>
-          <p className="text-sm text-neutral-400 mt-0.5">TechGear Co. · {SELLER_ID}</p>
+          <p className="mt-0.5 text-sm text-neutral-400">TechGear Co. | {SELLER_ID}</p>
         </div>
         <Link href="/seller/products">
           <Button size="sm" variant="outline">
@@ -60,99 +104,143 @@ function SellerDashboardContent() {
           <TabsTrigger value="metrics">Metrics</TabsTrigger>
         </TabsList>
 
-        {/* Orders Tab */}
         <TabsContent value="orders">
           <div className="space-y-3">
             {sellerOrders.length === 0 ? (
-              <div className="text-center py-16 text-neutral-500">
-                <Package className="h-10 w-10 mx-auto mb-3 opacity-50" />
+              <div className="py-16 text-center text-neutral-500">
+                <Package className="mx-auto mb-3 h-10 w-10 opacity-50" />
                 <p>No orders yet.</p>
               </div>
             ) : (
-              sellerOrders.map((order) => {
-                const nextState = NEXT_STATES[order.state];
-                const actionLabel = ACTION_LABELS[order.state];
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {SELLER_FILTERS.map((filter) => (
+                    <Button
+                      key={filter.key}
+                      type="button"
+                      size="sm"
+                      variant={activeFilter === filter.key ? "default" : "secondary"}
+                      onClick={() => setActiveFilter(filter.key)}
+                    >
+                      {filter.label}
+                    </Button>
+                  ))}
+                </div>
 
-                return (
-                  <Card key={order.id}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm font-mono text-neutral-400">{order.id}</span>
-                            <OrderStatusBadge state={order.state} />
-                          </div>
-                          <p className="text-sm text-neutral-300">
-                            {order.items.map((i) => i.product_name).join(", ")}
-                          </p>
-                          <div className="flex items-center gap-3 mt-2 text-xs text-neutral-500">
-                            <span>{formatDate(order.created_at)}</span>
-                            <span>{formatUsd(order.total_usd)}</span>
-                            {order.tracking_number && (
-                              <span className="font-mono">{order.carrier} · {order.tracking_number.slice(0, 12)}…</span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {order.label_url && (
-                            <a href={order.label_url} target="_blank" rel="noopener noreferrer">
-                              <Button size="sm" variant="outline">
-                                <Download className="h-3.5 w-3.5" />
-                                Label
-                              </Button>
-                            </a>
-                          )}
-                          {nextState && actionLabel && (
-                            <Button
-                              size="sm"
-                              onClick={() => advanceOrderState(order.id, nextState)}
-                            >
-                              <CheckCircle className="h-3.5 w-3.5" />
-                              {actionLabel}
-                            </Button>
-                          )}
-                          <Link href={`/orders/${order.id}`}>
-                            <Button size="sm" variant="ghost">
-                              <ExternalLink className="h-3.5 w-3.5" />
-                            </Button>
-                          </Link>
-                        </div>
-                      </div>
+                {filteredOrders.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-8 text-center text-sm text-neutral-500">
+                      No orders match this filter.
                     </CardContent>
                   </Card>
-                );
-              })
+                ) : (
+                  filteredOrders.map((order) => {
+                    const nextState = NEXT_STATES[order.state];
+                    const actionLabel = ACTION_LABELS[order.state];
+
+                    return (
+                      <Card key={order.id}>
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                <span className="text-sm font-mono text-neutral-400">
+                                  {order.id}
+                                </span>
+                                <OrderStatusBadge state={order.state} />
+                              </div>
+                              <p className="text-sm text-neutral-300">
+                                {order.items.map((item) => item.product_name).join(", ")}
+                              </p>
+                              <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+                                <span>{formatDate(order.created_at)}</span>
+                                <span>{formatUsd(order.total_usd)}</span>
+                                {order.tracking_number && (
+                                  <span className="font-mono">
+                                    {order.carrier} | {order.tracking_number.slice(0, 12)}...
+                                  </span>
+                                )}
+                              </div>
+                              <EscrowProgressBar
+                                className="mt-3"
+                                state={order.state}
+                                payoutSchedule={order.payout_schedule}
+                                compact
+                                isDisputed={order.state === OrderState.DISPUTED}
+                              />
+                            </div>
+
+                            <div className="flex shrink-0 items-center gap-2">
+                              {order.label_url && (
+                                <a
+                                  href={order.label_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                >
+                                  <Button size="sm" variant="outline">
+                                    <Download className="h-3.5 w-3.5" />
+                                    Label
+                                  </Button>
+                                </a>
+                              )}
+                              {nextState && actionLabel && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => advanceOrderState(order.id, nextState)}
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  {actionLabel}
+                                </Button>
+                              )}
+                              <Link href={`/orders/${order.id}`}>
+                                <Button size="sm" variant="ghost">
+                                  <ExternalLink className="h-3.5 w-3.5" />
+                                </Button>
+                              </Link>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })
+                )}
+              </>
             )}
           </div>
         </TabsContent>
 
-        {/* Products Tab */}
         <TabsContent value="products">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {products.map((p) => (
-              <Card key={p.id}>
-                <div className="relative h-32 rounded-t-xl overflow-hidden">
-                  <Image src={p.image_url} alt={p.name} fill className="object-cover" />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {products.map((product) => (
+              <Card key={product.id}>
+                <div className="relative h-32 overflow-hidden rounded-t-xl">
+                  <Image
+                    src={product.image_url}
+                    alt={product.name}
+                    fill
+                    className="object-cover"
+                  />
                 </div>
                 <CardContent className="p-3">
-                  <p className="font-medium text-sm text-neutral-100 truncate">{p.name}</p>
-                  <div className="flex justify-between mt-1 text-sm">
-                    <span className="text-neutral-400">{formatUsd(p.price_usd)}</span>
-                    <span className="text-neutral-500">{p.stock} in stock</span>
+                  <p className="truncate text-sm font-medium text-neutral-100">
+                    {product.name}
+                  </p>
+                  <div className="mt-1 flex justify-between text-sm">
+                    <span className="text-neutral-400">{formatUsd(product.price_usd)}</span>
+                    <span className="text-neutral-500">{product.stock} in stock</span>
                   </div>
                 </CardContent>
               </Card>
             ))}
-            <Card className="border-dashed flex items-center justify-center h-48 cursor-pointer hover:border-neutral-600 transition-colors">
+            <Card className="flex h-48 cursor-pointer items-center justify-center border-dashed transition-colors hover:border-neutral-600">
               <div className="text-center text-neutral-600">
-                <PlusCircle className="h-8 w-8 mx-auto mb-2" />
+                <PlusCircle className="mx-auto mb-2 h-8 w-8" />
                 <p className="text-sm">Add Product</p>
               </div>
             </Card>
           </div>
         </TabsContent>
 
-        {/* Payouts Tab */}
         <TabsContent value="payouts">
           <Card>
             <CardHeader>
@@ -165,9 +253,9 @@ function SellerDashboardContent() {
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-neutral-200">
-                          {payout.state.replace("_", " ")} — Order {payout.order_id}
+                          {payout.state.replace("_", " ")} | Order {payout.order_id}
                         </p>
-                        <p className="text-xs text-neutral-500 mt-0.5">
+                        <p className="mt-0.5 text-xs text-neutral-500">
                           {formatDateTime(payout.timestamp)}
                         </p>
                       </div>
@@ -179,7 +267,7 @@ function SellerDashboardContent() {
                           href={`${XRPL_EXPLORER_URL}/tx/${payout.tx_hash}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center justify-end gap-0.5"
+                          className="flex items-center justify-end gap-0.5 text-xs text-neutral-500 hover:text-neutral-300"
                         >
                           tx <ExternalLink className="h-3 w-3" />
                         </a>
@@ -193,9 +281,8 @@ function SellerDashboardContent() {
           </Card>
         </TabsContent>
 
-        {/* Metrics Tab */}
         <TabsContent value="metrics">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {[
               {
                 icon: Package,
@@ -235,14 +322,14 @@ function SellerDashboardContent() {
             ].map(({ icon: Icon, label, value, sub, color }) => (
               <Card key={label}>
                 <CardContent className="p-5">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-8 w-8 rounded-lg bg-neutral-800 flex items-center justify-center">
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-neutral-800">
                       <Icon className={`h-4 w-4 ${color}`} />
                     </div>
                     <p className="text-sm text-neutral-400">{label}</p>
                   </div>
                   <p className="text-2xl font-bold text-neutral-100">{value}</p>
-                  <p className="text-xs text-neutral-500 mt-1">{sub}</p>
+                  <p className="mt-1 text-xs text-neutral-500">{sub}</p>
                 </CardContent>
               </Card>
             ))}

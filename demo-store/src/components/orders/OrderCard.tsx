@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { type Order } from "@/lib/flowstate/types";
+import { EscrowProgressBar, OrderState, type Order } from "@/lib/flowstate";
 import { formatUsd, formatDate } from "@/lib/utils";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -58,6 +58,14 @@ export function OrderCard({ order }: OrderCardProps) {
                   </span>
                 )}
               </div>
+
+              <EscrowProgressBar
+                className="mt-3"
+                state={order.state}
+                payoutSchedule={order.payout_schedule}
+                compact
+                isDisputed={order.state === OrderState.DISPUTED}
+              />
             </div>
           </div>
         </CardContent>

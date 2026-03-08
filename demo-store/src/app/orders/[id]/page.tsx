@@ -11,14 +11,13 @@ import {
   MapPin,
 } from "lucide-react";
 import { useOrderStore } from "@/stores/order-store";
-import { OrderTracker } from "@/lib/flowstate/client/OrderTracker";
+import { EscrowProgressBar, OrderState, OrderTracker } from "@/lib/flowstate";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatUsd, formatDate, shortenAddress } from "@/lib/utils";
 import { XRPL_EXPLORER_URL } from "@/lib/constants";
-import { OrderState } from "@/lib/flowstate/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -81,6 +80,19 @@ export default function OrderDetailPage({ params }: PageProps) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left column */}
         <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Progress Snapshot</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EscrowProgressBar
+                state={order.state}
+                payoutSchedule={order.payout_schedule}
+                isDisputed={order.state === OrderState.DISPUTED}
+              />
+            </CardContent>
+          </Card>
+
           {/* Order Tracker */}
           <Card>
             <CardHeader>
