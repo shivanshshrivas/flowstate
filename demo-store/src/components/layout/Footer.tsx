@@ -1,7 +1,14 @@
+"use client";
+
 import Link from "next/link";
 import { Zap, ExternalLink } from "lucide-react";
+import { useUserStore } from "@/stores/user-store";
 
 export function Footer() {
+  const user = useUserStore((s) => s.user);
+  const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const isSeller = supabaseConfigured && user?.role === "seller";
+
   return (
     <footer className="border-t border-neutral-800 bg-neutral-950 mt-auto">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
@@ -10,7 +17,7 @@ export function Footer() {
             <div className="flex h-6 w-6 items-center justify-center rounded bg-violet-600">
               <Zap className="h-3 w-3 text-white" />
             </div>
-            <span>FlowState Demo Store</span>
+            <span>Demo Store</span>
             <span className="text-neutral-600">—</span>
             <span>Powered by XRPL EVM Sidechain</span>
           </div>
@@ -28,12 +35,14 @@ export function Footer() {
             >
               Faucet
             </Link>
-            <Link
-              href="/seller/signup"
-              className="text-neutral-500 hover:text-neutral-300 transition-colors"
-            >
-              Become a Seller
-            </Link>
+            {!isSeller && (
+              <Link
+                href="/seller/signup"
+                className="text-neutral-500 hover:text-neutral-300 transition-colors"
+              >
+                Become a Seller
+              </Link>
+            )}
           </div>
         </div>
         <p className="mt-4 text-center text-xs text-neutral-600">

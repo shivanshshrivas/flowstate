@@ -11,10 +11,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { RequireRole } from "@/components/guards/RequireRole";
 
 const SELLER_ID = "seller-001";
 
-export default function SellerProductsPage() {
+function SellerProductsContent() {
   const products = MOCK_PRODUCTS.filter((p) => p.seller_id === SELLER_ID);
   const [showForm, setShowForm] = useState(false);
 
@@ -107,5 +108,13 @@ export default function SellerProductsPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function SellerProductsPage() {
+  return (
+    <RequireRole roles={["seller", "admin"]}>
+      <SellerProductsContent />
+    </RequireRole>
   );
 }

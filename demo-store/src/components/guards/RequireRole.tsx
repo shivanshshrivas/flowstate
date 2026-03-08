@@ -22,7 +22,11 @@ export function RequireRole({ roles, children, redirect = true }: Props) {
 
   useEffect(() => {
     if (supabaseConfigured && !isLoading && !hasAccess && redirect) {
-      router.replace(user ? "/" : "/auth/login");
+      if (user) {
+        router.replace(user.role === "seller" ? "/seller" : "/");
+      } else {
+        router.replace("/auth/login");
+      }
     }
   }, [isLoading, hasAccess, supabaseConfigured, redirect, user, router]);
 

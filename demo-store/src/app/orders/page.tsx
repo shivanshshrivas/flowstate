@@ -55,7 +55,7 @@ function OrdersContent() {
 
 export default function OrdersPage() {
   return (
-    <RequireRole roles={["buyer", "seller", "admin"]}>
+    <RequireRole roles={["buyer", "admin"]}>
       <OrdersContent />
     </RequireRole>
   );

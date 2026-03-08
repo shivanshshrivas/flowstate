@@ -26,7 +26,7 @@ export function PayButton({ product, className }: PayButtonProps) {
         title={!isConnected ? "Connect your wallet to checkout" : undefined}
       >
         <Zap className="h-5 w-5" />
-        {isConnected ? "Buy with FlowState" : "Connect Wallet to Buy"}
+        {isConnected ? "Pay with FlowState" : "Connect Wallet to Pay"}
       </Button>
       <CheckoutOverlay
         open={open}

@@ -6,6 +6,7 @@ import { ShoppingCart } from "lucide-react";
 import { type Product } from "@/lib/flowstate/types";
 import { formatUsd } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart-store";
+import { useUserStore } from "@/stores/user-store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,9 @@ interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
+  const role = useUserStore((s) => s.user?.role);
+  const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const showAddButton = !supabaseConfigured || role !== "seller";
 
   return (
     <Card className="group overflow-hidden hover:border-neutral-700 transition-colors">
@@ -49,16 +53,18 @@ export function ProductCard({ product }: ProductCardProps) {
           <span className="text-lg font-bold text-neutral-100">
             {formatUsd(product.price_usd)}
           </span>
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.preventDefault();
-              addItem(product);
-            }}
-          >
-            <ShoppingCart className="h-4 w-4" />
-            Add
-          </Button>
+          {showAddButton && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.preventDefault();
+                addItem(product);
+              }}
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Add
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>
