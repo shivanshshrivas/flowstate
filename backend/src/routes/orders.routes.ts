@@ -221,6 +221,34 @@ export function ordersRoutes(orderService: OrderService) {
       }
     );
 
+    // GET /orders — list orders with optional filters
+    fastify.get(
+      "/",
+      { preHandler: authPreHandler },
+      async (request, reply) => {
+        const q = request.query as {
+          buyer_wallet?: string;
+          seller_id?: string;
+          status?: string;
+          limit?: string;
+          offset?: string;
+        };
+
+        const result = await orderService.list(request.projectId, {
+          buyer_wallet: q.buyer_wallet,
+          seller_id: q.seller_id,
+          status: q.status,
+          limit: q.limit ? parseInt(q.limit, 10) : undefined,
+          offset: q.offset ? parseInt(q.offset, 10) : undefined,
+        });
+
+        return reply.send({
+          success: true,
+          data: result,
+        });
+      }
+    );
+
     // GET /orders/:id
     fastify.get(
       "/:id",

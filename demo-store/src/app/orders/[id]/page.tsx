@@ -11,7 +11,8 @@ import {
   MapPin,
 } from "lucide-react";
 import { useOrderStore } from "@/stores/order-store";
-import { EscrowProgressBar, OrderState, OrderTracker } from "@/lib/flowstate";
+import { useUserStore } from "@/stores/user-store";
+import { EscrowProgressBar, OrderState, OrderTracker, BuyerChat } from "@flowstate/gateway";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +43,7 @@ const ADVANCE_LABELS: Partial<Record<OrderState, string>> = {
 export default function OrderDetailPage({ params }: PageProps) {
   const { id } = use(params);
   const { orders, fetchOrders, advanceOrderState } = useOrderStore();
+  const { user } = useUserStore();
   const order = orders.find((o) => o.id === id);
 
   useEffect(() => {
@@ -280,6 +282,11 @@ export default function OrderDetailPage({ params }: PageProps) {
           </Card>
         </div>
       </div>
+
+      {/* Floating BuyerChat widget */}
+      {user?.wallet_address && (
+        <BuyerChat userId={user.wallet_address} />
+      )}
     </div>
   );
 }

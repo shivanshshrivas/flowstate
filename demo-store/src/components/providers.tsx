@@ -6,7 +6,7 @@ import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { wagmiConfig } from "@/lib/wagmi";
-import { FlowStateProvider } from "@/lib/flowstate/client/FlowStateProvider";
+import { FlowStateProvider } from "@flowstate/gateway";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { useUserStore } from "@/stores/user-store";
 import "@rainbow-me/rainbowkit/styles.css";
@@ -15,7 +15,8 @@ const queryClient = new QueryClient();
 
 const flowStateConfig = {
   projectId: "demo",
-  apiKey: "demo-key",
+  apiKey: process.env.NEXT_PUBLIC_FLOWSTATE_API_KEY ?? "demo-key",
+  baseUrl: process.env.NEXT_PUBLIC_FLOWSTATE_API_URL,
   network: "testnet" as const,
 };
 

@@ -526,4 +526,44 @@ export class OrderService {
 
     return { order, items };
   }
+
+  async list(
+    projectId: string,
+    filters: {
+      buyer_wallet?: string;
+      seller_id?: string;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ): Promise<{ orders: Order[]; total: number }> {
+    const limit = Math.min(filters.limit ?? 50, 200);
+    const offset = filters.offset ?? 0;
+
+    const rows = await db<Order[]>`
+      select *
+      from orders
+      where project_id = ${projectId}
+        ${filters.buyer_wallet ? db`and buyer_wallet = ${filters.buyer_wallet}` : db``}
+        ${filters.seller_id ? db`and seller_id = ${filters.seller_id}` : db``}
+        ${filters.status ? db`and state = ${filters.status}` : db``}
+      order by created_at desc
+      limit ${limit}
+      offset ${offset}
+    `;
+
+    const countRows = await db<{ count: string }[]>`
+      select count(*)::text as count
+      from orders
+      where project_id = ${projectId}
+        ${filters.buyer_wallet ? db`and buyer_wallet = ${filters.buyer_wallet}` : db``}
+        ${filters.seller_id ? db`and seller_id = ${filters.seller_id}` : db``}
+        ${filters.status ? db`and state = ${filters.status}` : db``}
+    `;
+
+    return {
+      orders: rows,
+      total: parseInt(countRows[0]?.count ?? "0", 10),
+    };
+  }
 }

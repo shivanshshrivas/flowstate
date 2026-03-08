@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
   let body: Record<string, unknown>;
   try {
-    body = flowstate.verifyAndParse(rawBody, signature);
+    body = flowstate.verifyAndParse(rawBody, signature) as unknown as Record<string, unknown>;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Webhook verification failed";
