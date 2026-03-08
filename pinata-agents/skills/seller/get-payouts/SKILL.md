@@ -1,6 +1,7 @@
 ---
 name: get-payouts
 description: Get a seller's complete payout history including amounts, trigger states, transaction hashes, and pending balance
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

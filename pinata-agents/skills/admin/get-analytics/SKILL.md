@@ -1,6 +1,7 @@
 ---
 name: get-analytics
 description: Get platform-wide analytics — total order volume, revenue, dispute rate, active escrows, and daily breakdown
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

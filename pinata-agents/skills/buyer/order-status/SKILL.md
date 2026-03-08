@@ -1,6 +1,7 @@
 ---
 name: order-status
 description: Get the full current status, financials, shipping info, and state history of a specific buyer order
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

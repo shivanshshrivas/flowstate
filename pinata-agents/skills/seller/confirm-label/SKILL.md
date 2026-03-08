@@ -1,6 +1,7 @@
 ---
 name: confirm-label
 description: Confirm that a shipping label has been printed for an order — triggers state transition from ESCROWED to LABEL_CREATED and releases the immediate payout
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

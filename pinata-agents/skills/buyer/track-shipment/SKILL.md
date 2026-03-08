@@ -1,6 +1,7 @@
 ---
 name: track-shipment
 description: Get carrier, tracking number, current location, ETA, and tracking history for a buyer's shipped order
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

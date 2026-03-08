@@ -1,6 +1,7 @@
 ---
 name: list-sellers
 description: List all sellers on the platform with their status, business info, and performance metrics
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

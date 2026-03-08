@@ -1,6 +1,7 @@
 ---
 name: get-metrics
 description: Get a seller's performance metrics — order counts, revenue, fulfillment speed, dispute rate, pending payouts, and reputation score
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

@@ -1,6 +1,7 @@
 ---
 name: respond-dispute
 description: Respond to an open buyer dispute — accept to issue a full refund, or contest with evidence for admin review
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

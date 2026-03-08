@@ -1,6 +1,7 @@
 ---
 name: file-dispute
 description: File a dispute against an order for a damaged, wrong, or missing item — freezes remaining escrow and notifies the seller
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

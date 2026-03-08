@@ -1,6 +1,7 @@
 ---
 name: gas-report
 description: Get a full on-chain gas cost report — total gas spent in USD, average per state transition, and breakdown by contract function
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

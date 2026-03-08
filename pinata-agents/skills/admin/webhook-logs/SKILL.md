@@ -1,6 +1,7 @@
 ---
 name: webhook-logs
 description: View recent webhook delivery logs filtered by status — shows source, event type, HTTP status, and payload summary
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

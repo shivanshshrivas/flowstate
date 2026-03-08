@@ -1,6 +1,7 @@
 ---
 name: list-my-orders
 description: List all orders for the current buyer, optionally filtered by status
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

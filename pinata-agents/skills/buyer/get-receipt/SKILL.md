@@ -1,6 +1,7 @@
 ---
 name: get-receipt
 description: Retrieve the invoice and receipt for a buyer's order, including line items, totals, payment method, and IPFS document URL
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

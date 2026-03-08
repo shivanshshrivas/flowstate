@@ -1,6 +1,7 @@
 ---
 name: list-orders
 description: List a seller's orders, optionally filtered by status — flags orders that need immediate action
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage

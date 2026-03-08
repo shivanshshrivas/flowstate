@@ -1,6 +1,7 @@
 ---
 name: flagged-sellers
 description: List sellers whose dispute rate exceeds a threshold — returns risk level and recommended action per seller
+metadata: {"env": ["FLOWSTATE_API_KEY", "FLOWSTATE_API_URL"]}
 ---
 
 ## Usage
