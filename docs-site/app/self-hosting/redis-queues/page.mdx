@@ -1,0 +1,26 @@
+# Redis And Queues
+
+Redis is optional in the backend.
+
+## Without Redis
+
+If `REDIS_URL` is unset:
+
+- webhook dispatch runs inline
+- cron jobs run through `setInterval`
+- the backend still boots
+
+This is good enough for local development when you only need one process and minimal moving parts.
+
+## With Redis
+
+If `REDIS_URL` is set:
+
+- BullMQ queues are initialized
+- webhook delivery is enqueued
+- cron jobs run through queue workers
+
+## Why This Matters In Docs
+
+Document Redis as an optional production feature, not a hard local prerequisite. That keeps onboarding lighter while still explaining the real deployment path.
+

@@ -1,0 +1,60 @@
+# Webhook Model
+
+FlowState emits outbound project webhooks from the backend API to your server.
+
+## Registration
+
+Register destinations with:
+
+`POST /api/v1/webhooks/register`
+
+Request body:
+
+```json
+{
+  "url": "https://myshop.com/api/webhooks/flowstate",
+  "events": ["order.state_changed", "dispute.created"]
+}
+```
+
+If `events` is omitted, backend defaults to `["*"]`.
+
+## Delivery Payload
+
+```json
+{
+  "event": "order.state_changed",
+  "data": {
+    "order_id": "ord_123",
+    "previous_state": "SHIPPED",
+    "new_state": "IN_TRANSIT",
+    "tx_hash": "0x..."
+  },
+  "timestamp": "2026-03-07T12:00:00.000Z"
+}
+```
+
+## Signed Headers
+
+- `X-FlowState-Signature: sha256=<hex>`
+- `X-FlowState-Event: <event name>`
+
+## Delivery Semantics
+
+- Event routing is project-scoped and filtered by registration `events`.
+- With Redis/BullMQ enabled, delivery jobs use `attempts: 5` with exponential backoff.
+- Without Redis, backend dispatches inline in-process (no queue retries).
+- All attempts are logged to `webhook_logs`.
+
+## Event Names
+
+- `order.state_changed`
+- `dispute.created`
+- `dispute.resolved`
+
+Additional internal logic may emit other event names in specific paths. Handlers should ignore unknown event types safely.
+
+## Verification Rule
+
+Always verify signature against the raw request body before JSON parsing for business logic.
+

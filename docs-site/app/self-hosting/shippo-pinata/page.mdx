@@ -1,0 +1,30 @@
+# Shippo And Pinata
+
+These two integrations are in different states.
+
+## Shippo
+
+Shippo is active in the backend and is used for:
+
+- rate lookup
+- label purchase
+- tracking status lookup
+- Shippo webhook handling
+
+You need a Shippo test key in `backend/.env`.
+
+## Pinata
+
+Pinata is still represented by a stub bridge in the backend.
+
+The stub:
+
+- returns deterministic fake CIDs
+- prints pin operations to the console
+- lets the rest of the order flow proceed during development
+
+## Documentation Guidance
+
+- document Shippo as a real dependency
+- document Pinata as an implementation slot that still needs full wiring in the backend
+

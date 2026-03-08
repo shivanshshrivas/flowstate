@@ -1,0 +1,82 @@
+# Quickstart
+
+Use this path to integrate FlowState as a package, not as a local monorepo stack.
+
+## Prerequisites
+
+- Node.js 20+
+- npm
+- Access to the private/beta `@flowstate/gateway` package
+- A public HTTPS endpoint for webhooks
+
+## 1. Install The Package
+
+```bash
+npm install @flowstate/gateway
+```
+
+If your npm token cannot access the package, request package access from the FlowState team.
+
+## 2. Create A Project And API Key
+
+```bash
+curl -X POST https://api.flowstate.xyz/api/v1/auth/projects/create \
+  -H "content-type: application/json" \
+  -d '{
+    "name": "My Shop",
+    "owner_email": "owner@myshop.com",
+    "platform_fee_wallet": "0xPlatformWallet...",
+    "platform_fee_bps": 250
+  }'
+```
+
+Save the returned `project_id` and `api_key` in secure server-side environment variables.
+
+## 3. Add Provider And Button
+
+```tsx
+import { FlowStateProvider, PayButton } from "@flowstate/gateway";
+
+export default function ProductCheckout({ product }: { product: any }) {
+  return (
+    <FlowStateProvider
+      config={{
+        projectId: process.env.NEXT_PUBLIC_FLOWSTATE_PROJECT_ID!,
+        apiKey: process.env.NEXT_PUBLIC_FLOWSTATE_API_KEY!,
+        network: "testnet"
+      }}
+    >
+      <PayButton product={product} />
+    </FlowStateProvider>
+  );
+}
+```
+
+## 4. Register Your Webhook Endpoint
+
+```bash
+curl -X POST https://api.flowstate.xyz/api/v1/webhooks/register \
+  -H "content-type: application/json" \
+  -H "authorization: Bearer fs_live_..." \
+  -d '{
+    "url": "https://myshop.com/api/webhooks/flowstate",
+    "events": ["order.state_changed", "dispute.created", "dispute.resolved"]
+  }'
+```
+
+Persist the returned webhook `secret`, then verify `X-FlowState-Signature` in your handler.
+
+## 5. Validate End To End
+
+1. Trigger checkout from `PayButton`.
+2. Confirm order creation and shipping selection in your app.
+3. Confirm you receive `order.state_changed` webhooks.
+4. Render state updates using `OrderTracker` or your own UI.
+
+## Next
+
+- [Install](/integration/install)
+- [Frontend Integration](/integration/frontend)
+- [Backend Webhooks](/integration/backend-webhooks)
+- [API Endpoints](/reference/api-endpoints)
+

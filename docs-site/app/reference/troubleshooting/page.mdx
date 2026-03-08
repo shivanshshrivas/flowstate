@@ -1,0 +1,51 @@
+# Troubleshooting
+
+## 401 MISSING_API_KEY or INVALID_API_KEY
+
+Check:
+
+- `Authorization: Bearer <api_key>` is present
+- key is active and unrotated
+- key belongs to the project you are querying
+
+## 403 On `/platform/:projectId/*`
+
+Path `projectId` must match the project resolved from your API key.
+
+## 400 On `GET /shipping/rates`
+
+The route requires JSON-encoded query parameters:
+
+- `from`
+- `to`
+- `parcel`
+
+If any are missing or invalid JSON, request is rejected.
+
+## 409 During Order Transitions
+
+Common causes:
+
+- confirming escrow before shipping selection
+- confirming label in wrong state
+- finalizing before grace period expires
+
+## Webhook Signature Verification Fails
+
+Check:
+
+- you verify the raw request body, not parsed JSON reserialization
+- `FLOWSTATE_WEBHOOK_SECRET` matches the registration secret
+- header starts with `sha256=`
+
+## Missing Retry Behavior
+
+- Redis enabled: BullMQ webhook retries are active.
+- Redis disabled: backend uses inline dispatch fallback with no queue retries.
+
+## WebSocket Connection Closes Early
+
+- Send auth message within 5 seconds:
+  - `{"type":"auth","token":"fs_live_..."}`
+- Invalid token triggers close with auth error.
+

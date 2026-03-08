@@ -1,0 +1,77 @@
+# Auth And API Keys
+
+Most FlowState endpoints require `Authorization: Bearer <api_key>`.
+
+## Create Project (Bootstrap)
+
+```http
+POST /api/v1/auth/projects/create
+```
+
+```json
+{
+  "name": "My Shop",
+  "owner_email": "owner@myshop.com",
+  "platform_fee_wallet": "0xPlatformWallet...",
+  "platform_fee_bps": 250,
+  "contracts": {
+    "escrowStateMachine": "0x...",
+    "disputeResolver": "0x..."
+  }
+}
+```
+
+Successful response:
+
+```json
+{
+  "success": true,
+  "data": {
+    "project_id": "fs_proj_...",
+    "api_key": "fs_live_..."
+  }
+}
+```
+
+Store raw key once. Backend stores only hashed key material.
+
+## Authenticated Requests
+
+```http
+Authorization: Bearer fs_live_...
+```
+
+The backend resolves the project by:
+
+- extracting first 16 chars as key prefix
+- hashing full key (SHA-256)
+- matching active key record by prefix + hash
+
+## Rotate API Key
+
+```http
+POST /api/v1/auth/api-keys/rotate
+Authorization: Bearer fs_live_...
+```
+
+Request body:
+
+```json
+{
+  "label": "2026-q1-rotation"
+}
+```
+
+Rotation deactivates previous keys for that project and returns a new raw key.
+
+## Auth Exceptions
+
+These endpoints do not require bearer auth:
+
+- `POST /api/v1/auth/projects/create`
+- `POST /api/v1/shipping/webhook/shippo`
+
+## Project Isolation Behavior
+
+For `/platform/:projectId/*` routes, backend returns `403` if path `projectId` does not match the authenticated key's project.
+

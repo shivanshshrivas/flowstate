@@ -1,0 +1,106 @@
+# API Endpoints
+
+Base URL:
+
+`https://api.flowstate.xyz`
+
+All REST routes are mounted under `/api/v1` except `/health` and `/ws`.
+
+## Auth Model
+
+Bearer auth required for all endpoints below except:
+
+- `POST /api/v1/auth/projects/create`
+- `POST /api/v1/shipping/webhook/shippo`
+
+Header format:
+
+```http
+Authorization: Bearer fs_live_...
+```
+
+## Auth
+
+- `POST /api/v1/auth/projects/create`
+- `POST /api/v1/auth/api-keys/rotate`
+
+## Orders
+
+- `POST /api/v1/orders/create`
+  - Body includes: `seller_id`, `buyer_wallet`, `seller_wallet`, `address_from`, `address_to`, `parcel`, `items[]`.
+- `POST /api/v1/orders/:id/select-shipping`
+  - Body: `{ "rate_id": "..." }`.
+- `POST /api/v1/orders/:id/confirm-escrow`
+  - Body: `{ "tx_hash": "0x..." }`.
+- `POST /api/v1/orders/:id/confirm-label-printed`
+  - Body: `{ "seller_wallet": "0x..." }`.
+- `POST /api/v1/orders/:id/finalize`
+- `GET /api/v1/orders/:id`
+
+## Shipping
+
+- `POST /api/v1/shipping/webhook/shippo`
+- `GET /api/v1/shipping/rates`
+  - Query params must include JSON-encoded strings: `from`, `to`, `parcel`.
+- `GET /api/v1/shipping/track/:orderId`
+
+## Sellers
+
+- `POST /api/v1/sellers/onboard`
+- `GET /api/v1/sellers/:id/orders`
+- `GET /api/v1/sellers/:id/metrics`
+- `GET /api/v1/sellers/:id/payouts`
+
+## Disputes
+
+- `POST /api/v1/disputes/create`
+- `POST /api/v1/disputes/:id/respond`
+- `POST /api/v1/disputes/:id/resolve`
+
+## Platform
+
+- `GET /api/v1/platform/:projectId/analytics`
+  - Optional query: `period=7d|30d|90d`.
+- `GET /api/v1/platform/:projectId/sellers`
+  - Optional query: `flagged=true|false&page=<n>&limit=<n>`.
+- `GET /api/v1/platform/:projectId/gas-costs`
+
+## Webhooks
+
+- `POST /api/v1/webhooks/register`
+- `GET /api/v1/webhooks/logs`
+  - Optional query: `page=<n>&limit=<n>`.
+
+## Agents
+
+- `POST /api/v1/agents/chat`
+  - Body: `{ "role": "buyer|seller|admin", "user_id": "...", "message": "..." }`.
+
+## Non-Versioned Endpoints
+
+- `GET /health`
+- `GET /ws` (WebSocket upgrade endpoint; auth sent as first message payload)
+
+## Response Conventions
+
+Routes generally respond with:
+
+```json
+{
+  "success": true,
+  "data": {}
+}
+```
+
+Errors use:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "..."
+  }
+}
+```
+

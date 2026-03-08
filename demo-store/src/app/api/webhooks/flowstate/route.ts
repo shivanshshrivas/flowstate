@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 /**
- * Webhook receiver stub — mirrors the future FlowState backend webhook endpoint.
+ * Webhook receiver stub - mirrors the future FlowState backend webhook endpoint.
  * When the backend is live, this route forwards events to the internal API.
  *
  * Expected events:
@@ -16,20 +16,23 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(request: NextRequest) {
   const signature = request.headers.get("x-flowstate-signature");
 
-  // TODO: verify HMAC signature when shared secret is configured
+  // TODO: verify HMAC signature when shared secret is configured.
   if (process.env.FLOWSTATE_WEBHOOK_SECRET && !signature) {
     return NextResponse.json({ error: "Missing signature" }, { status: 401 });
   }
 
   const body = await request.json();
-  const { event_type, order_id, data } = body;
+  const eventType = body.event ?? body.event_type;
+  const data = body.data ?? body;
+  const orderId = data?.order_id ?? body.order_id ?? null;
 
-  if (!event_type) {
+  if (!eventType) {
     return NextResponse.json({ error: "Missing event_type" }, { status: 400 });
   }
 
-  // TODO: process events — update DB, trigger UI refresh via revalidatePath, etc.
-  console.log(`[Webhook] ${event_type} for order ${order_id ?? "N/A"}`, data);
+  // The backend emits { event, data, timestamp }. The older event_type shape is still accepted
+  // so the demo route works against both the current backend and earlier mock payloads.
+  console.log(`[Webhook] ${eventType} for order ${orderId ?? "N/A"}`, data);
 
-  return NextResponse.json({ received: true, event_type });
+  return NextResponse.json({ received: true, event_type: eventType });
 }

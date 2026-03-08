@@ -1,0 +1,52 @@
+# Architecture Overview
+
+FlowState integration has three layers:
+
+1. `@flowstate/gateway` package embedded in your storefront
+2. hosted FlowState backend APIs (`/api/v1/*`)
+3. external bridges and settlement infrastructure (Shippo, webhook queueing, XRPL contracts)
+
+## Package Layer (Storefront + Server)
+
+- `FlowStateProvider`: project config + contract config context
+- `PayButton`: one-click checkout surface
+- `OrderTracker`: state timeline surface
+- server webhook handler: verifies signature and updates your local system
+
+## Backend API Layer
+
+All API groups are mounted under `/api/v1`:
+
+- `/auth` project bootstrap and key rotation
+- `/orders` checkout lifecycle orchestration
+- `/shipping` rates, tracking, inbound Shippo webhook
+- `/sellers` onboarding, order queues, payouts
+- `/disputes` buyer-seller resolution paths
+- `/platform` analytics and operational views
+- `/webhooks` destination registration and delivery logs
+- `/agents` role-based assistant chat routing
+
+## Runtime Flow
+
+1. Buyer clicks `PayButton`.
+2. Package flow drives order APIs: create order, select shipping, confirm escrow.
+3. Shipping updates advance order states.
+4. Backend emits webhook events to your registered endpoint.
+5. Your platform updates local order state and notifications.
+
+## Delivery And Eventing
+
+- Outbound events: signed webhook payloads (`X-FlowState-Signature`)
+- Optional queued delivery when Redis is available
+- Inline fallback dispatch when Redis is unavailable
+- Project-scoped WebSocket channel at `/ws`
+
+## Implemented Vs Roadmap
+
+These docs treat backend route contracts as source of truth. Architecture notes in `.claude/architecture.md` may include target capabilities not exposed yet.
+
+- Implemented now: route groups in `backend/src/routes/*`, Shippo bridge, API key auth, webhook registration/logs.
+- Example roadmap-only endpoint: `POST /api/v1/platform/:projectId/config` is described in architecture diagrams but is not currently registered in backend routes.
+- Roadmap-only examples from architecture should be considered intent unless an endpoint exists in `backend/src/routes`.
+
+
