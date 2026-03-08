@@ -6,35 +6,46 @@ Each major package has its own verification path.
 
 ```bash
 cd backend
-npm test
-npm run typecheck
+npm test          # Run test suite
+npm run typecheck # TypeScript type checking
 ```
 
 ## Demo Store
 
 ```bash
 cd demo-store
-npm run build
+npm run build     # Full production build (catches type errors and import issues)
 ```
 
 ## Contracts
 
 ```bash
 cd packages/contracts
-npm test
+npm test          # Hardhat test suite for FLUSD, EscrowStateMachine, DisputeResolver
 ```
 
 ## Docs Site
 
 ```bash
 cd docs-site
-npm run build
+npm run build     # Next.js build + Pagefind search index generation
 ```
 
 ## What To Verify For Docs-Related Changes
 
-- setup steps still match real files
-- env var names match code
-- webhook payload examples match backend behavior
-- links and commands are still valid from the documented working directory
+| Check                                  | How                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| Setup steps match real files           | Compare documented commands with actual file paths and scripts                 |
+| Env var names match code               | Cross-reference with `backend/src/config/env.ts` and `demo-store/.env.example` |
+| Package name is correct                | All imports should use `@shivanshshrivas/flowstate`                            |
+| Webhook payload examples match backend | Check `backend/src/services/webhook.service.ts`                                |
+| Contract addresses match deployments   | Check `packages/contracts/ignition/deployments/`                               |
+| Links and commands are valid           | Run from the documented working directory                                      |
+| API endpoint paths are accurate        | Cross-reference with `backend/src/routes/`                                     |
 
+## Pre-Push Checklist
+
+1. Run `npm run build` in the affected package (backend, demo-store, contracts, or docs-site).
+2. If you changed backend routes, run `npm test` in `backend/`.
+3. If you changed contracts, run `npm test` in `packages/contracts/`.
+4. If you changed docs, run `npm run build` in `docs-site/` and verify no broken links.

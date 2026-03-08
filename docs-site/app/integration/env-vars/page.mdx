@@ -1,45 +1,61 @@
-# Env Vars
+import { Callout } from "nextra/components";
 
-This page focuses on variables needed by an external integrator using the package + hosted APIs.
+# Environment Variables
+
+This page covers variables needed by an external integrator using the `@shivanshshrivas/flowstate` package with the hosted API gateway.
 
 ## Storefront / Frontend
 
-Required:
+These are `NEXT_PUBLIC_` prefixed variables exposed to the browser:
 
-- `NEXT_PUBLIC_FLOWSTATE_PROJECT_ID`
-- `NEXT_PUBLIC_FLOWSTATE_API_KEY`
-- `NEXT_PUBLIC_FLOWSTATE_NETWORK` (`testnet` or `mainnet`)
+| Variable                                   | Required      | Description                                   |
+| ------------------------------------------ | ------------- | --------------------------------------------- |
+| `NEXT_PUBLIC_FLOWSTATE_PROJECT_ID`         | Yes           | Your project ID from `/auth/projects/create`  |
+| `NEXT_PUBLIC_FLOWSTATE_API_KEY`            | Yes           | Your API key (used by client-side components) |
+| `NEXT_PUBLIC_FLOWSTATE_NETWORK`            | Yes           | `testnet` or `mainnet`                        |
+| `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`     | Recommended   | WalletConnect project ID for wallet modal     |
+| `NEXT_PUBLIC_MOCK_RLUSD_ADDRESS`           | Yes (testnet) | FLUSD token contract address                  |
+| `NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS` | Yes           | EscrowStateMachine contract address           |
+| `NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS`     | Yes           | DisputeResolver contract address              |
 
-Common wallet/chain settings:
+### Testnet Contract Addresses
 
-- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
-- `NEXT_PUBLIC_MOCK_RLUSD_ADDRESS`
-- `NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS`
-- `NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS`
-- `NEXT_PUBLIC_PAYMENT_SPLITTER_ADDRESS`
+```env
+NEXT_PUBLIC_MOCK_RLUSD_ADDRESS=0x257812213360Df9f3C19cAe9759B58cAcf39323d
+NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS=0x33136ca845ace5a4f8CC032793AF22eC024B2ee3
+NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS=0x9A2C9B4CE17eE3ffD5C3Db97a04009381f457731
+```
 
 ## Platform Server (Webhook + Backend Calls)
 
-- `FLOWSTATE_API_KEY` (server-side key for direct API usage)
-- `FLOWSTATE_WEBHOOK_SECRET` (returned by `/webhooks/register`)
-- `FLOWSTATE_API_BASE_URL` (default `https://api.flowstate.xyz`)
+These are server-side only variables — never expose them to client bundles:
 
-Never expose server-side secrets to client bundles.
+| Variable                   | Required | Description                                                        |
+| -------------------------- | -------- | ------------------------------------------------------------------ |
+| `FLOWSTATE_API_KEY`        | Yes      | Server-side API key for direct backend calls                       |
+| `FLOWSTATE_WEBHOOK_SECRET` | Yes      | Secret returned by `/webhooks/register` for signature verification |
+| `FLOWSTATE_API_BASE_URL`   | No       | Override the default `https://api.flowstate.xyz`                   |
+
+<Callout type="warning">
+  Never expose `FLOWSTATE_API_KEY` or `FLOWSTATE_WEBHOOK_SECRET` in client-side
+  code. These should only be used in server-side API routes or serverless
+  functions.
+</Callout>
 
 ## Optional: Self-Hosted Operator Variables
 
-If your team runs backend infrastructure directly, backend service variables are defined in:
+If your team runs the FlowState backend infrastructure directly, the backend service requires these variables (defined in `backend/src/config/env.ts`):
 
-- `backend/.env.example`
-- `backend/src/config/env.ts`
+| Variable                  | Required | Default | Description                                   |
+| ------------------------- | -------- | ------- | --------------------------------------------- |
+| `DATABASE_URL`            | Yes      | —       | PostgreSQL connection string                  |
+| `SHIPPO_KEY`              | Yes      | —       | Shippo API test key for shipping integration  |
+| `PORT`                    | No       | `3001`  | Backend server port                           |
+| `REDIS_URL`               | No       | —       | Redis connection URL; enables BullMQ queues   |
+| `PLATFORM_FEE_BPS`        | No       | `250`   | Platform fee in basis points (2.5%)           |
+| `GRACE_PERIOD_HOURS`      | No       | `48`    | Hours after delivery before auto-finalization |
+| `PINATA_BUYER_AGENT_URL`  | No       | —       | Pinata AI agent URL for buyer chat            |
+| `PINATA_SELLER_AGENT_URL` | No       | —       | Pinata AI agent URL for seller chat           |
+| `PINATA_ADMIN_AGENT_URL`  | No       | —       | Pinata AI agent URL for admin chat            |
 
-Core operator variables:
-
-- `DATABASE_URL`
-- `SHIPPO_KEY`
-- `REDIS_URL` (optional queue mode)
-- `PLATFORM_FEE_BPS`
-- `GRACE_PERIOD_HOURS`
-
-See [Internal Ops (Legacy)](/self-hosting/local-dev) for local operator docs.
-
+See [Internal Ops (Legacy)](/self-hosting/local-dev) for full local development setup.

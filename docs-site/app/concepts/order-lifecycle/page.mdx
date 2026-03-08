@@ -1,49 +1,102 @@
+import { Callout } from "nextra/components";
+
 # Order Lifecycle
 
-FlowState order state is managed as a finite state machine in backend constants.
+FlowState manages orders as a finite state machine. Each state transition triggers a partial payout to the seller and emits webhook events to your platform.
 
-- `INITIATED`
-- `ESCROWED`
-- `LABEL_CREATED`
-- `SHIPPED`
-- `IN_TRANSIT`
-- `DELIVERED`
-- `FINALIZED`
-- `DISPUTED`
+## States
+
+| State           | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `INITIATED`     | Order created, shipping options returned to buyer    |
+| `ESCROWED`      | Buyer's tokens locked in the escrow contract         |
+| `LABEL_CREATED` | Seller printed shipping label, first payout released |
+| `SHIPPED`       | Carrier has picked up the package                    |
+| `IN_TRANSIT`    | Package is moving through the carrier network        |
+| `DELIVERED`     | Package delivered to buyer, grace period starts      |
+| `FINALIZED`     | Grace period expired, holdback released to seller    |
+| `DISPUTED`      | Buyer opened a dispute, remaining funds frozen       |
 
 ## Primary Flow
 
 ```text
 INITIATED -> ESCROWED -> LABEL_CREATED -> SHIPPED -> IN_TRANSIT -> DELIVERED -> FINALIZED
-                                                         \
-                                                          -> DISPUTED
+                                                                       \-> DISPUTED
 ```
 
 ## State Transition Triggers
 
-- `POST /orders/create` creates order in `INITIATED`
-- `POST /orders/:id/confirm-escrow` moves `INITIATED -> ESCROWED`
-- `POST /orders/:id/confirm-label-printed` moves `ESCROWED -> LABEL_CREATED`
-- Shippo tracking webhook processing advances to `SHIPPED` and later `DELIVERED`
-- `POST /orders/:id/finalize` moves `DELIVERED -> FINALIZED` after grace period
-- `POST /disputes/create` moves eligible delivered orders into `DISPUTED`
+| Transition         | Trigger                                                                      |
+| ------------------ | ---------------------------------------------------------------------------- |
+| to `INITIATED`     | `POST /api/v1/orders/create` with items, addresses, and parcel dimensions    |
+| to `ESCROWED`      | `POST /api/v1/orders/:id/confirm-escrow` with the on-chain `tx_hash`         |
+| to `LABEL_CREATED` | `POST /api/v1/orders/:id/confirm-label-printed` by the seller                |
+| to `SHIPPED`       | Shippo `track_updated` webhook with carrier status `TRANSIT`                 |
+| to `IN_TRANSIT`    | Shippo `track_updated` webhook with continued transit substatus              |
+| to `DELIVERED`     | Shippo `track_updated` webhook with carrier status `DELIVERED`               |
+| to `FINALIZED`     | `POST /api/v1/orders/:id/finalize` after grace period, or auto-finalize cron |
+| to `DISPUTED`      | `POST /api/v1/disputes/create` on a `DELIVERED` order within grace period    |
 
-## Payout Defaults (Backend Source Of Truth)
+<Callout type="info">
+  Shipping state advances (`SHIPPED`, `IN_TRANSIT`, `DELIVERED`) are triggered
+  automatically by Shippo tracking webhooks. The Shippo bridge maps carrier
+  statuses to escrow events: `PRE_TRANSIT` maps to label scanned (no advance),
+  `TRANSIT` maps to shipped, `DELIVERED` maps to delivered.
+</Callout>
 
-From `backend/src/config/constants.ts`:
+## Payout Schedule
 
-- `LABEL_CREATED`: 1500 bps (15%)
-- `SHIPPED`: 1500 bps (15%)
-- `DELIVERED`: 3500 bps (35%)
-- `FINALIZED`: 3500 bps (35%)
-- Platform fee default: 250 bps (2.5%)
-- Grace period default: 48 hours
+Funds are released to the seller progressively as milestones are reached. The on-chain contract uses a 5-tranche payout schedule in basis points:
+
+| Tranche | State                                     | Percentage     | Cumulative |
+| ------- | ----------------------------------------- | -------------- | ---------- |
+| 1       | `ESCROWED` (immediate on escrow creation) | 15% (1500 bps) | 15%        |
+| 2       | `LABEL_CREATED`                           | 15% (1500 bps) | 30%        |
+| 3       | `SHIPPED`                                 | 20% (2000 bps) | 50%        |
+| 4       | `IN_TRANSIT` / `DELIVERED`                | 35% (3500 bps) | 85%        |
+| 5       | `FINALIZED` (holdback)                    | 15% (1500 bps) | 100%       |
+
+<Callout type="warning">
+  The backend payout defaults in `backend/src/config/constants.ts` use a
+  slightly different 4-step split (15%/15%/35%/35%). The on-chain contract uses
+  the authoritative 5-step schedule shown above. These will be aligned in a
+  future release.
+</Callout>
+
+## Platform Fee
+
+- Default: **250 bps (2.5%)**
+- Deducted from the final holdback tranche at finalization
+- Configurable per project up to 10% (1000 bps) via the contract owner
+- Sent to the `platformFeeWallet` configured in the escrow contract
+
+## Grace Period
+
+- Default: **48 hours** (backend) / **3 days** (contract, configurable 1-30 days)
+- Starts when order reaches `DELIVERED`
+- Buyer can open a dispute during this window
+- After grace period, the order auto-finalizes via the cron scheduler (runs every 15 minutes)
+
+## Dispute Flow
+
+When a buyer disputes a delivered order:
+
+1. `POST /api/v1/disputes/create` — buyer submits evidence (description + optional files pinned to IPFS)
+2. On-chain `initiateDispute()` freezes remaining escrow funds
+3. Order moves to `DISPUTED` state
+4. Seller has **72 hours** to respond:
+   - **Accept** — full refund to buyer
+   - **Contest** — submit counter-evidence, dispute moves to `UNDER_REVIEW`
+5. If seller does not respond within 72h — **auto-resolve** in buyer's favor (full refund)
+6. Admin can resolve contested disputes as:
+   - `REFUND_BUYER` — 100% refund
+   - `RELEASE_SELLER` — 0% refund, release to seller
+   - `SPLIT` — custom basis point split
 
 ## Dispute Timers
 
-- Seller response deadline: 72 hours from dispute open
-- Review window after seller contest: 7 days
-
-## Roadmap Note
-
-`.claude/architecture.md` contains broader lifecycle narratives. For live integrations, treat route behavior and constants in `backend/src` as authoritative.
+| Timer                                 | Duration                         |
+| ------------------------------------- | -------------------------------- |
+| Seller response deadline              | 72 hours from dispute creation   |
+| Review window (after seller contests) | 7 days                           |
+| Auto-resolve (seller no-response)     | 72 hours, then full buyer refund |

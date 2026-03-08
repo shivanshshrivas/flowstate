@@ -2,50 +2,74 @@
 
 ## 401 MISSING_API_KEY or INVALID_API_KEY
 
-Check:
-
-- `Authorization: Bearer <api_key>` is present
-- key is active and unrotated
-- key belongs to the project you are querying
+- Confirm `Authorization: Bearer fs_live_...` is present in the request header.
+- Confirm the key is active and has not been rotated (rotation deactivates all prior keys).
+- Confirm the key belongs to the project you are querying.
 
 ## 403 On `/platform/:projectId/*`
 
-Path `projectId` must match the project resolved from your API key.
+The `projectId` in the URL path must match the project resolved from your API key. You cannot access another project's platform data.
 
 ## 400 On `GET /shipping/rates`
 
-The route requires JSON-encoded query parameters:
+The route requires **JSON-encoded** query parameters:
 
-- `from`
-- `to`
-- `parcel`
+- `from` — JSON string of the sender address object
+- `to` — JSON string of the recipient address object
+- `parcel` — JSON string of the parcel dimensions object
 
-If any are missing or invalid JSON, request is rejected.
+If any are missing or contain malformed JSON, the request is rejected. URL-encode the JSON strings when building the query.
 
 ## 409 During Order Transitions
 
-Common causes:
+The order is not in the correct state for the requested transition. Common causes:
 
-- confirming escrow before shipping selection
-- confirming label in wrong state
-- finalizing before grace period expires
+| Attempted Action        | Required State | Error If In                                     |
+| ----------------------- | -------------- | ----------------------------------------------- |
+| `confirm-escrow`        | `INITIATED`    | Any other state                                 |
+| `confirm-label-printed` | `ESCROWED`     | `INITIATED` (shipping not selected yet)         |
+| `finalize`              | `DELIVERED`    | `SHIPPED` or earlier (grace period not started) |
+| `disputes/create`       | `DELIVERED`    | `FINALIZED` (grace period already expired)      |
+
+Check the valid transitions defined in `backend/src/config/constants.ts`.
 
 ## Webhook Signature Verification Fails
 
-Check:
+- Verify the **raw request body** — not re-serialized JSON. Frameworks that auto-parse JSON may alter whitespace.
+- Confirm `FLOWSTATE_WEBHOOK_SECRET` matches the `secret` returned by `/webhooks/register`.
+- Confirm the `X-FlowState-Signature` header starts with `sha256=`.
+- Use timing-safe comparison (`crypto.timingSafeEqual`) to prevent timing attacks.
 
-- you verify the raw request body, not parsed JSON reserialization
-- `FLOWSTATE_WEBHOOK_SECRET` matches the registration secret
-- header starts with `sha256=`
+## Missing Retry Behavior For Webhooks
 
-## Missing Retry Behavior
+| Symptom                             | Cause                          | Fix                                                                         |
+| ----------------------------------- | ------------------------------ | --------------------------------------------------------------------------- |
+| Webhooks delivered once, no retries | `REDIS_URL` not set            | Set `REDIS_URL` to enable BullMQ queue-based delivery with 5 retry attempts |
+| Webhook delivery works but is slow  | Inline dispatch is synchronous | Enable Redis for async queued delivery                                      |
 
-- Redis enabled: BullMQ webhook retries are active.
-- Redis disabled: backend uses inline dispatch fallback with no queue retries.
+## WebSocket Connection Closes Immediately
 
-## WebSocket Connection Closes Early
+- Send the auth message within **5 seconds** of connecting:
 
-- Send auth message within 5 seconds:
-  - `{"type":"auth","token":"fs_live_..."}`
-- Invalid token triggers close with auth error.
+```json
+{ "type": "auth", "token": "fs_live_..." }
+```
 
+- Invalid or missing token triggers an immediate close with an auth error frame.
+- Check that you are connecting to `/ws` (not `/api/v1/ws`).
+
+## Order Auto-Finalization Not Happening
+
+- The auto-finalize cron runs every **15 minutes**. Check if enough time has passed after the grace period.
+- With Redis: cron runs via BullMQ repeatable jobs.
+- Without Redis: cron runs via `setInterval` — the backend process must stay running.
+
+## Dispute Not Auto-Resolving
+
+- The dispute auto-resolve cron runs every **30 minutes**.
+- Auto-resolve triggers only for `OPEN` disputes past the 72-hour seller response deadline.
+- If the seller has already responded (even with a contest), auto-resolve does not apply.
+
+## FLUSD Faucet Cooldown
+
+The FLUSD faucet contract has a **1-hour cooldown** per address. If `faucet()` reverts, wait for the cooldown to expire. Each call mints 50,000 FLUSD.

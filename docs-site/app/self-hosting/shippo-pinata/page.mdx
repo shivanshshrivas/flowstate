@@ -1,30 +1,71 @@
+import { Callout } from "nextra/components";
+
 # Shippo And Pinata
 
-These two integrations are in different states.
+These two external integrations are in different states of implementation.
 
-## Shippo
+## Shippo (Live)
 
-Shippo is active in the backend and is used for:
+Shippo is fully operational in the backend (`backend/src/bridges/shippo.bridge.ts`). It provides:
 
-- rate lookup
-- label purchase
-- tracking status lookup
-- Shippo webhook handling
+| Feature              | Description                                                                                    |
+| -------------------- | ---------------------------------------------------------------------------------------------- |
+| **Rate lookup**      | `getRates(from, to, parcel)` — creates a Shippo shipment and returns available carrier rates   |
+| **Label purchase**   | `purchaseLabel(rateId)` — buys a Shippo transaction, returns label PDF URL and tracking number |
+| **Tracking**         | `getTrackingStatus(carrier, trackingNumber)` — fetches live tracking from Shippo               |
+| **Webhook handling** | `handleWebhook(payload)` — processes `track_updated` events from Shippo                        |
 
-You need a Shippo test key in `backend/.env`.
+### Shippo Status Mapping
 
-## Pinata
+The Shippo bridge maps carrier tracking statuses to FlowState escrow events:
 
-Pinata is still represented by a stub bridge in the backend.
+| Shippo Status | Mapped Event                    | Advances State?           |
+| ------------- | ------------------------------- | ------------------------- |
+| `PRE_TRANSIT` | `LABEL_SCANNED`                 | No                        |
+| `TRANSIT`     | `SHIPPED` or `OUT_FOR_DELIVERY` | Yes (first transit event) |
+| `DELIVERED`   | `DELIVERED`                     | Yes                       |
+| `RETURNED`    | `RETURN_INITIATED`              | No                        |
+| `FAILURE`     | `DELIVERY_FAILED`               | No                        |
 
-The stub:
+### Setup
 
-- returns deterministic fake CIDs
-- prints pin operations to the console
-- lets the rest of the order flow proceed during development
+Add your Shippo test API key to `backend/.env`:
 
-## Documentation Guidance
+```env
+SHIPPO_KEY=shippo_test_...
+```
 
-- document Shippo as a real dependency
-- document Pinata as an implementation slot that still needs full wiring in the backend
+The backend requires this key and will fail to start without it.
 
+## Pinata / IPFS (Stub)
+
+Pinata is represented by a stub bridge in the backend (`backend/src/bridges/pinata.bridge.ts`).
+
+The stub provides the same interface as a real implementation:
+
+- `pinJSON(data)` — returns a deterministic mock CID
+- `pinFile(file)` — returns a deterministic mock CID
+- `getGatewayUrl(cid)` — returns a mock gateway URL
+
+The order flow calls the Pinata bridge to pin:
+
+- Invoice data when escrow is confirmed
+- Shipping labels when purchased from Shippo
+- Buyer/seller dispute evidence
+- Payout receipts at each milestone
+
+<Callout type="info">
+  The stub lets the full order lifecycle proceed during development without a
+  real Pinata account. CIDs in the database will be mock values. Wire in a real
+  Pinata SDK implementation when deploying to production.
+</Callout>
+
+## Pinata AI Agents
+
+The backend also integrates with Pinata's AI agent platform for chat routing (`backend/src/services/agent.service.ts`). Three agent roles are supported:
+
+- `buyer` — buyer-facing support agent
+- `seller` — seller-facing support agent
+- `admin` — admin-facing operations agent
+
+Agent URLs are configured via environment variables (`PINATA_BUYER_AGENT_URL`, etc.) and communicate over WebSocket using Pinata's `connect.challenge` / `chat.send` protocol.

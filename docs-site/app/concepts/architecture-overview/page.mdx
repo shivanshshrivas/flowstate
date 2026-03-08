@@ -1,52 +1,104 @@
+import { Callout } from "nextra/components";
+
 # Architecture Overview
 
-FlowState integration has three layers:
+`@shivanshshrivas/flowstate` connects four layers to provide crypto-powered e-commerce checkout with escrow and shipping tracking.
 
-1. `@flowstate/gateway` package embedded in your storefront
-2. hosted FlowState backend APIs (`/api/v1/*`)
-3. external bridges and settlement infrastructure (Shippo, webhook queueing, XRPL contracts)
+## 1. Package Layer (Your Storefront)
 
-## Package Layer (Storefront + Server)
+The npm package `@shivanshshrivas/flowstate` provides React components and contract ABIs that embed directly in your frontend:
 
-- `FlowStateProvider`: project config + contract config context
-- `PayButton`: one-click checkout surface
-- `OrderTracker`: state timeline surface
-- server webhook handler: verifies signature and updates your local system
+| Export                  | Role                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `FlowStateProvider`     | Context provider — injects project config, API key, network, and contract addresses |
+| `PayButton`             | One-click checkout — wallet connection, token approval, multi-step checkout overlay |
+| `OrderTracker`          | Visual state timeline — shows escrow progress, payout milestones, and XRPL tx links |
+| `useFlowState`          | React hook — access resolved config and contract addresses                          |
+| `EscrowStateMachineAbi` | ABI for the on-chain escrow contract                                                |
+| `MockRLUSDAbi`          | ABI for the FLUSD ERC-20 token contract                                             |
 
-## Backend API Layer
+Your server-side code handles webhook signature verification and syncs state updates into your local database.
 
-All API groups are mounted under `/api/v1`:
+## 2. Backend API Layer
 
-- `/auth` project bootstrap and key rotation
-- `/orders` checkout lifecycle orchestration
-- `/shipping` rates, tracking, inbound Shippo webhook
-- `/sellers` onboarding, order queues, payouts
-- `/disputes` buyer-seller resolution paths
-- `/platform` analytics and operational views
-- `/webhooks` destination registration and delivery logs
-- `/agents` role-based assistant chat routing
+The FlowState API gateway (Fastify server in `backend/`) orchestrates the full order lifecycle. All routes are under `/api/v1`:
+
+| Group    | Prefix      | Responsibility                                                          |
+| -------- | ----------- | ----------------------------------------------------------------------- |
+| Auth     | `/auth`     | Project bootstrap, API key creation and rotation                        |
+| Orders   | `/orders`   | Create order, select shipping, confirm escrow, advance states, finalize |
+| Shipping | `/shipping` | Shippo rate lookup, label purchase, tracking, inbound carrier webhook   |
+| Sellers  | `/sellers`  | Onboarding, order queues, metrics, payout history                       |
+| Disputes | `/disputes` | Buyer dispute creation, seller response, admin resolution               |
+| Platform | `/platform` | Analytics, seller risk views, gas cost estimates                        |
+| Webhooks | `/webhooks` | Destination registration and delivery logs                              |
+| Agents   | `/agents`   | Role-based AI chat routing via Pinata agents                            |
+
+Supporting infrastructure:
+
+- **PostgreSQL** — direct access via `postgres` driver (no ORM)
+- **Redis + BullMQ** — optional async queues for webhook delivery, state transitions, and agent routing
+- **WebSocket** — real-time project-scoped event push at `/ws`
+- **Cron scheduler** — auto-finalization (every 15 min) and dispute auto-resolve (every 30 min)
+
+## 3. Smart Contract Layer
+
+Three Solidity contracts deployed on **XRPL EVM Sidechain Testnet** (chain ID `1449000`):
+
+**FLUSD** — Mock stablecoin (ERC-20, 6 decimals) simulating RLUSD. Public `faucet()` mints 50,000 FLUSD per call with a 1-hour cooldown.
+
+**EscrowStateMachine** — Core escrow contract implementing a 7-state FSM:
+
+```text
+ESCROWED -> LABEL_CREATED -> SHIPPED -> IN_TRANSIT -> DELIVERED -> FINALIZED
+                                                          \-> DISPUTED
+```
+
+- `createEscrow()` locks buyer tokens and immediately releases the first payout tranche (15%) to the seller
+- `advanceState()` moves to the next state and releases the corresponding payout
+- `finalize()` releases the holdback minus platform fee after a grace period
+- `initiateDispute()` freezes remaining funds
+
+Default payout schedule: `[1500, 1500, 2000, 3500, 1500]` bps (15% / 15% / 20% / 35% / 15%).
+
+**DisputeResolver** — Manages dispute lifecycle. Buyers submit evidence (pinned to IPFS). Sellers have 72 hours to respond. Admin can resolve as refund, release, or custom split. Auto-resolves in buyer's favor if seller misses the deadline.
+
+## 4. External Bridges
+
+| Bridge            | Status | Purpose                                                                                           |
+| ----------------- | ------ | ------------------------------------------------------------------------------------------------- |
+| **Shippo**        | Live   | Rate shopping, label purchase, tracking polling, inbound `track_updated` webhook                  |
+| **Pinata (IPFS)** | Stub   | Pin invoices, labels, evidence, and payout receipts. Currently returns mock CIDs                  |
+| **Blockchain**    | Stub   | Verify escrow deposits, advance on-chain state, release payouts. Currently returns mock tx hashes |
+
+<Callout type="warning">
+  The Shippo integration is fully operational. The Pinata and blockchain bridges
+  are stubbed — they return deterministic mock data so the full order flow works
+  during development. Treat live on-chain settlement as not yet wired through
+  the API gateway.
+</Callout>
 
 ## Runtime Flow
 
-1. Buyer clicks `PayButton`.
-2. Package flow drives order APIs: create order, select shipping, confirm escrow.
-3. Shipping updates advance order states.
-4. Backend emits webhook events to your registered endpoint.
-5. Your platform updates local order state and notifications.
+```text
+1. Buyer clicks PayButton
+2. CheckoutOverlay collects shipping address and option
+3. POST /orders/create -> order in INITIATED state, Shippo rates returned
+4. POST /orders/:id/select-shipping -> Shippo label purchased, IPFS pin, USD-to-token conversion
+5. POST /orders/:id/confirm-escrow -> on-chain deposit verified, order moves to ESCROWED
+6. Seller confirms label printed -> LABEL_CREATED, 15% payout released
+7. Shippo webhook: carrier picks up -> SHIPPED, 15% released
+8. Shippo webhook: carrier in transit -> IN_TRANSIT, 20% released
+9. Shippo webhook: delivered -> DELIVERED, 35% released
+10. Grace period expires (48h) -> auto-finalize, holdback (15%) released minus 2.5% platform fee
+```
+
+At each step, the backend emits `order.state_changed` webhooks to your registered endpoints and pushes real-time updates over WebSocket.
 
 ## Delivery And Eventing
 
-- Outbound events: signed webhook payloads (`X-FlowState-Signature`)
-- Optional queued delivery when Redis is available
-- Inline fallback dispatch when Redis is unavailable
-- Project-scoped WebSocket channel at `/ws`
-
-## Implemented Vs Roadmap
-
-These docs treat backend route contracts as source of truth. Architecture notes in `.claude/architecture.md` may include target capabilities not exposed yet.
-
-- Implemented now: route groups in `backend/src/routes/*`, Shippo bridge, API key auth, webhook registration/logs.
-- Example roadmap-only endpoint: `POST /api/v1/platform/:projectId/config` is described in architecture diagrams but is not currently registered in backend routes.
-- Roadmap-only examples from architecture should be considered intent unless an endpoint exists in `backend/src/routes`.
-
-
+- **Outbound webhooks** — HMAC-SHA256-signed payloads with `X-FlowState-Signature` header
+- **Queue mode** (Redis) — BullMQ delivers webhooks with 5 retries and exponential backoff
+- **Inline mode** (no Redis) — synchronous in-process dispatch, no queue retries
+- **WebSocket** — project-scoped channel at `/ws` with 5-second auth window
+- **Cron** — auto-finalize delivered orders past grace period, auto-resolve expired disputes

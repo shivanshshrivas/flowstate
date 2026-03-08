@@ -1,23 +1,26 @@
 # Webhook Model
 
-FlowState emits outbound project webhooks from the backend API to your server.
+FlowState emits outbound webhooks from the backend API to your server at each order state transition, dispute creation, and dispute resolution.
 
 ## Registration
 
-Register destinations with:
+Register webhook destinations with your API key:
 
-`POST /api/v1/webhooks/register`
-
-Request body:
+```http
+POST /api/v1/webhooks/register
+Authorization: Bearer fs_live_...
+```
 
 ```json
 {
   "url": "https://myshop.com/api/webhooks/flowstate",
-  "events": ["order.state_changed", "dispute.created"]
+  "events": ["order.state_changed", "dispute.created", "dispute.resolved"]
 }
 ```
 
-If `events` is omitted, backend defaults to `["*"]`.
+If `events` is omitted, the backend defaults to `["*"]` (all events).
+
+The response includes a `secret` — persist this immediately for signature verification.
 
 ## Delivery Payload
 
@@ -25,7 +28,7 @@ If `events` is omitted, backend defaults to `["*"]`.
 {
   "event": "order.state_changed",
   "data": {
-    "order_id": "ord_123",
+    "order_id": "fs_ord_abc123",
     "previous_state": "SHIPPED",
     "new_state": "IN_TRANSIT",
     "tx_hash": "0x..."
@@ -36,25 +39,56 @@ If `events` is omitted, backend defaults to `["*"]`.
 
 ## Signed Headers
 
-- `X-FlowState-Signature: sha256=<hex>`
-- `X-FlowState-Event: <event name>`
+Every webhook delivery includes two headers:
+
+| Header                  | Value                                                                          |
+| ----------------------- | ------------------------------------------------------------------------------ |
+| `X-FlowState-Signature` | `sha256=<hex>` — HMAC-SHA256 of the raw request body using your webhook secret |
+| `X-FlowState-Event`     | Event name (e.g., `order.state_changed`)                                       |
+
+## Signature Verification
+
+```ts
+import crypto from "node:crypto";
+
+function verifyFlowStateSignature(
+  rawBody: string,
+  header: string | null,
+  secret: string,
+): boolean {
+  if (!header?.startsWith("sha256=")) return false;
+  const received = header.slice("sha256=".length);
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(rawBody)
+    .digest("hex");
+  return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected));
+}
+```
+
+Always verify the signature against the **raw request body** before JSON parsing for business logic.
 
 ## Delivery Semantics
 
-- Event routing is project-scoped and filtered by registration `events`.
-- With Redis/BullMQ enabled, delivery jobs use `attempts: 5` with exponential backoff.
-- Without Redis, backend dispatches inline in-process (no queue retries).
-- All attempts are logged to `webhook_logs`.
+- Event routing is project-scoped and filtered by the `events` array in your registration.
+- **Queue mode** (Redis/BullMQ enabled): delivery jobs use `attempts: 5` with exponential backoff starting at 5 seconds. Concurrency: 10. Rate limited to 100 deliveries per minute.
+- **Inline mode** (Redis unavailable): backend dispatches synchronously in-process with no queue retries.
+- All delivery attempts are logged to the `webhook_logs` table, including HTTP status and response body.
 
 ## Event Names
 
-- `order.state_changed`
-- `dispute.created`
-- `dispute.resolved`
+| Event                 | Trigger                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------- |
+| `order.state_changed` | Any order state transition (escrow confirmed, shipped, delivered, finalized, etc.) |
+| `dispute.created`     | Buyer opens a dispute on a delivered order                                         |
+| `dispute.resolved`    | Admin resolves a dispute (refund, release, or split)                               |
 
-Additional internal logic may emit other event names in specific paths. Handlers should ignore unknown event types safely.
+Additional internal events (`payout:recorded`) are emitted on the event bus but not dispatched as outbound webhooks.
 
-## Verification Rule
+## Handler Best Practices
 
-Always verify signature against the raw request body before JSON parsing for business logic.
-
+- Verify the `X-FlowState-Signature` header before trusting payload data.
+- Branch on the `event` field to route processing.
+- Use idempotent writes keyed by `event` + `order_id` or `dispute_id`.
+- Return a `2xx` status only after durable processing (database write committed).
+- Ignore unknown event names gracefully — new event types may be added.

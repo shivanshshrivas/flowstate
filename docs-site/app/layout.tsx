@@ -11,7 +11,8 @@ export const metadata: Metadata = {
     default: "FlowState Docs",
     template: "%s | FlowState Docs",
   },
-  description: "Developer documentation for the FlowState backend, demo store, and XRPL EVM contracts.",
+  description:
+    "Developer documentation for @shivanshshrivas/flowstate — one-click crypto checkout, event-based escrow, and Shippo shipping tracking for e-commerce platforms.",
   icons: {
     icon: "/icon.svg",
   },

@@ -1,42 +1,37 @@
 # Events And Webhooks
 
-FlowState has three event surfaces: internal event bus, outbound webhooks, and WebSocket pushes.
+FlowState has three event surfaces: an internal event bus, outbound webhooks to your server, and WebSocket pushes for real-time updates.
 
-## Internal Event Names
+## Internal Event Bus
 
-- `order:state_changed`
-- `dispute:created`
-- `dispute:resolved`
-- `payout:recorded`
+These events are emitted inside the backend using a typed `EventEmitter` singleton (`flowStateEmitter`):
 
-These are emitted inside the backend event bus.
+| Event                 | Payload Type             | Trigger                     |
+| --------------------- | ------------------------ | --------------------------- |
+| `order:state_changed` | `OrderStateChangedEvent` | Any order state transition  |
+| `dispute:created`     | `DisputeCreatedEvent`    | Buyer opens a dispute       |
+| `dispute:resolved`    | `DisputeResolvedEvent`   | Admin resolves a dispute    |
+| `payout:recorded`     | `PayoutRecordedEvent`    | Payout recorded to database |
 
-## Outbound Webhook Event Names (Primary)
+Internal events trigger both webhook dispatch and WebSocket broadcast.
 
-- `order.state_changed`
-- `dispute.created`
-- `dispute.resolved`
+## Outbound Webhook Events
 
-These are dispatched to registered webhook endpoints.
+These are dispatched as HTTP POST requests to your registered webhook endpoints:
 
-Compatibility note: some shipping fallback paths may emit `order.status_updated`. Treat unknown event names as no-op unless explicitly supported by your handler.
+| Event                 | Trigger                          | Key `data` fields                                    |
+| --------------------- | -------------------------------- | ---------------------------------------------------- |
+| `order.state_changed` | Order transitions between states | `order_id`, `previous_state`, `new_state`, `tx_hash` |
+| `dispute.created`     | Buyer opens a dispute            | `dispute_id`, `order_id`, `buyer_evidence_cid`       |
+| `dispute.resolved`    | Admin resolves a dispute         | `dispute_id`, `order_id`, `outcome`, `refund_bps`    |
 
-## WebSocket Event Names
-
-- `order_state_changed`
-- `dispute_created`
-- `pong`
-- `error`
-
-Defined message types also include `escrow_created`, `chat_response`, and `payout_released`, but not all are emitted in current bootstrap wiring.
-
-## Webhook Payload Example
+### Payload Structure
 
 ```json
 {
   "event": "order.state_changed",
   "data": {
-    "order_id": "ord_123",
+    "order_id": "fs_ord_abc123",
     "previous_state": "LABEL_CREATED",
     "new_state": "SHIPPED",
     "tx_hash": "0x..."
@@ -45,14 +40,42 @@ Defined message types also include `escrow_created`, `chat_response`, and `payou
 }
 ```
 
-## Headers
+### Headers
 
-- `X-FlowState-Signature: sha256=<hex>`
-- `X-FlowState-Event: <event>`
+| Header                  | Description                                                       |
+| ----------------------- | ----------------------------------------------------------------- |
+| `X-FlowState-Signature` | `sha256=<hex>` — HMAC-SHA256 of raw body with your webhook secret |
+| `X-FlowState-Event`     | Event name (e.g., `order.state_changed`)                          |
+
+### Delivery
+
+- Webhook delivery uses a 10-second timeout per attempt.
+- With Redis: BullMQ queue with 5 retry attempts, exponential backoff (starting at 5s), concurrency of 10, rate limited to 100/min.
+- Without Redis: synchronous inline dispatch, no retries.
+- All attempts logged to `webhook_logs` with HTTP status and response body.
+
+## WebSocket Events
+
+Connect to `/ws` and authenticate within 5 seconds:
+
+```json
+{ "type": "auth", "token": "fs_live_..." }
+```
+
+Events pushed to connected clients:
+
+| Event                 | Description                      |
+| --------------------- | -------------------------------- |
+| `order_state_changed` | Order moved to a new state       |
+| `dispute_created`     | Dispute opened on an order       |
+| `pong`                | Response to client `ping`        |
+| `error`               | Auth failure or processing error |
+
+Additional message types are defined in the codebase (`escrow_created`, `chat_response`, `payout_released`) but are not all wired in current bootstrap code.
 
 ## Security
 
-- Verify signature against raw body bytes.
-- Ignore unknown event names safely.
-- Make handlers idempotent.
-
+- Always verify the `X-FlowState-Signature` header against the raw body bytes before processing.
+- Ignore unknown event names safely — treat them as no-ops.
+- Make your handlers idempotent to handle potential redeliveries.
+- WebSocket connections are project-scoped: you only receive events for your project.

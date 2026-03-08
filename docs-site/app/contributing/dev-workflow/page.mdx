@@ -1,6 +1,6 @@
 # Dev Workflow
 
-Use a narrow workflow for changes so contributors do not accidentally mix architecture work, API work, and frontend demo work in one patch.
+Use a narrow workflow so changes don't accidentally mix architecture work, API work, and frontend work in one patch.
 
 ## Recommended Flow
 
@@ -11,21 +11,31 @@ Use a narrow workflow for changes so contributors do not accidentally mix archit
 
 ## Good Boundaries
 
-- backend API change plus backend tests
-- contract change plus contract tests
-- demo-store UI change plus demo-store build
-- docs update plus supporting env example or README update
+| Change Scope          | What To Include                                 |
+| --------------------- | ----------------------------------------------- |
+| Backend API change    | Backend code + backend tests                    |
+| Contract change       | Contract code + contract tests                  |
+| Demo store UI change  | Demo store code + demo store build              |
+| Package export change | `demo-store/src/lib/flowstate/*` + related docs |
+| Docs update           | MDX files + supporting env/README changes       |
 
 ## Docs Authoring
 
-- add or edit docs under `docs-site/app/`
-- create a `page.mdx` file for each route you want to expose
-- update the nearest `_meta.js` file so the page appears in the right sidebar order
-- run `cd docs-site && npm run build` before sending docs changes upstream
+- Add or edit docs under `docs-site/app/`.
+- Create a `page.mdx` file for each route you want to expose.
+- Update the nearest `_meta.js` file so the page appears in the correct sidebar position.
+- Run `cd docs-site && npm run build` before pushing docs changes.
+- The build includes a Pagefind search index step (`postbuild`).
+
+## Package Name
+
+The npm package is `@shivanshshrivas/flowstate`. When referencing it in docs, code examples, or import statements, use this exact name. The package source lives in `demo-store/src/lib/flowstate/` as a local mirror.
 
 ## Current Gotchas
 
-- the architecture doc describes the intended end-state, not just current code
-- the backend and contract payout defaults are not fully aligned yet
-- some backend bridges are still stubs, so docs should not oversell live integrations
-
+- The architecture doc (`.claude/architecture.md`) describes the intended end-state, not just current code.
+- The backend and contract payout defaults are not fully aligned:
+  - Backend: `[1500, 1500, 3500, 3500]` (4-step)
+  - Contract: `[1500, 1500, 2000, 3500, 1500]` (5-step)
+- The Pinata and blockchain bridges are stubs. Docs should not claim live IPFS pinning or on-chain settlement through the API gateway.
+- The Shippo bridge is the only fully live external integration.

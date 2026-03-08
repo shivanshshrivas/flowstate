@@ -1,11 +1,15 @@
+import { Callout } from "nextra/components";
+
 # Frontend Integration
 
-Embed FlowState on buyer-facing pages with a provider plus one-click button.
+Embed FlowState crypto checkout on buyer-facing pages with a provider, a one-click button, and an order tracker.
 
 ## 1. Wrap App With Provider
 
+The `FlowStateProvider` makes project configuration and contract addresses available to all child components via React context.
+
 ```tsx
-import { FlowStateProvider } from "@flowstate/gateway";
+import { FlowStateProvider } from "@shivanshshrivas/flowstate";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -14,12 +18,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         projectId: process.env.NEXT_PUBLIC_FLOWSTATE_PROJECT_ID!,
         apiKey: process.env.NEXT_PUBLIC_FLOWSTATE_API_KEY!,
         network: "testnet",
+        theme: {
+          primaryColor: "#b24d18",
+          borderRadius: "12px",
+          fontFamily: "Inter, sans-serif",
+        },
         contracts: {
-          escrowStateMachine: process.env.NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS as `0x${string}`,
-          disputeResolver: process.env.NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS as `0x${string}`,
-          paymentSplitter: process.env.NEXT_PUBLIC_PAYMENT_SPLITTER_ADDRESS as `0x${string}`,
-          mockRLUSD: process.env.NEXT_PUBLIC_MOCK_RLUSD_ADDRESS as `0x${string}`
-        }
+          escrowStateMachine: process.env
+            .NEXT_PUBLIC_ESCROW_STATE_MACHINE_ADDRESS as `0x${string}`,
+          disputeResolver: process.env
+            .NEXT_PUBLIC_DISPUTE_RESOLVER_ADDRESS as `0x${string}`,
+          mockRLUSD: process.env
+            .NEXT_PUBLIC_MOCK_RLUSD_ADDRESS as `0x${string}`,
+        },
       }}
     >
       {children}
@@ -28,39 +39,116 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 ```
 
+### FlowStateConfig
+
+| Property    | Type             | Required | Description                                         |
+| ----------- | ---------------- | -------- | --------------------------------------------------- |
+| `projectId` | `string`         | Yes      | Your FlowState project ID (`fs_proj_...`)           |
+| `apiKey`    | `string`         | Yes      | Your FlowState API key (`fs_live_...`)              |
+| `network`   | `string`         | Yes      | `"testnet"` or `"mainnet"`                          |
+| `theme`     | `FlowStateTheme` | No       | Custom `primaryColor`, `borderRadius`, `fontFamily` |
+| `contracts` | `object`         | No       | Override default contract addresses                 |
+
 ## 2. Add One-Click Button
 
-```tsx
-import { PayButton } from "@flowstate/gateway";
+The `PayButton` is a drop-in checkout trigger. It detects wallet connection state and opens a multi-step checkout overlay.
 
-export function ProductBuy({ product }: { product: any }) {
+```tsx
+import { PayButton } from "@shivanshshrivas/flowstate";
+
+export function ProductBuy({ product }: { product: Product }) {
   return <PayButton product={product} />;
 }
 ```
 
-The button flow maps to backend API calls in this order:
+**Button states:**
 
-1. `POST /api/v1/orders/create`
-2. `POST /api/v1/orders/:id/select-shipping`
-3. `POST /api/v1/orders/:id/confirm-escrow`
+- No wallet connected: renders "Connect Wallet to Buy"
+- Wallet connected: renders "Buy with FlowState"
+
+**Checkout overlay flow:**
+
+1. **Shipping Address** — buyer enters delivery address
+2. **Shipping Option** — buyer selects from Shippo-provided carrier rates
+3. **Confirm** — price breakdown showing USD subtotal, shipping cost, and FLUSD token amount
+4. **Processing** — escrow deposit in progress (token approval + `transferAndEscrow`)
+5. **Success** — order created, escrow confirmed, "Protected by FlowState Escrow" banner
+
+The overlay drives these backend API calls in sequence:
+
+```text
+POST /api/v1/orders/create
+POST /api/v1/orders/:id/select-shipping
+POST /api/v1/orders/:id/confirm-escrow
+```
 
 ## 3. Show Order Progress
 
-```tsx
-import { OrderTracker } from "@flowstate/gateway";
+The `OrderTracker` renders a visual timeline showing each state in the escrow lifecycle.
 
-export function OrderStatus({ order }: { order: any }) {
+```tsx
+import { OrderTracker } from "@shivanshshrivas/flowstate";
+
+export function OrderStatus({ order }: { order: Order }) {
   return <OrderTracker order={order} />;
 }
 ```
 
-## Wallet / Network Expectations
+**Features:**
 
-- Wallet connection is required before checkout.
-- XRPL EVM testnet chain ID: `1449000`.
-- Contract addresses should be provided through environment variables.
+- Checkmark icon for completed states, filled circle for current state, empty circle for future states
+- Payout percentage displayed at each milestone
+- Timestamps for each state transition
+- Transaction links to the XRPL EVM Explorer (`explorer.testnet.xrplevm.org`)
+- Red "Order Disputed" banner when the order is in `DISPUTED` state
 
-## If You Build A Custom UI
+## 4. Access Config From Context
 
-You can skip package UI components and call backend endpoints directly. See [API Endpoints](/reference/api-endpoints).
+Use the `useFlowState` hook to read the resolved configuration from any child component:
 
+```tsx
+import { useFlowState } from "@shivanshshrivas/flowstate";
+
+function MyComponent() {
+  const { config, contracts } = useFlowState();
+  // config.projectId, config.apiKey, config.network
+  // contracts.escrowStateMachine, contracts.mockRLUSD, etc.
+}
+```
+
+## Wallet / Network Requirements
+
+- Wallet connection is required before checkout (wagmi + a connector like RainbowKit)
+- Target network: **XRPL EVM Sidechain Testnet**
+  - Chain ID: `1449000`
+  - RPC: `https://rpc.testnet.xrplevm.org`
+  - Explorer: `https://explorer.testnet.xrplevm.org`
+- Payment token: **FLUSD** (6 decimals, 1:1 USD peg)
+  - Faucet available: call `faucet()` on the FLUSD contract to mint 50,000 test tokens (1-hour cooldown)
+
+## Direct Contract Interaction
+
+For custom UIs that bypass the `PayButton`, the package exports contract ABIs:
+
+```ts
+import {
+  EscrowStateMachineAbi,
+  MockRLUSDAbi,
+} from "@shivanshshrivas/flowstate";
+import { useWriteContract } from "wagmi";
+
+// Approve FLUSD spending
+const { writeContract } = useWriteContract();
+writeContract({
+  address: flusdAddress,
+  abi: MockRLUSDAbi,
+  functionName: "approve",
+  args: [escrowAddress, amount],
+});
+```
+
+<Callout type="info">
+  You can skip the package UI components entirely and call backend endpoints
+  directly. See [API Endpoints](/reference/api-endpoints) for the full REST
+  surface.
+</Callout>

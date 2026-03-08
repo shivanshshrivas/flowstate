@@ -1,21 +1,22 @@
+import { Callout } from "nextra/components";
+
 # Quickstart
 
-Use this path to integrate FlowState as a package, not as a local monorepo stack.
+Get a one-click crypto checkout button running in your storefront.
 
 ## Prerequisites
 
 - Node.js 20+
 - npm
-- Access to the private/beta `@flowstate/gateway` package
+- A wallet provider setup (wagmi + RainbowKit recommended)
+- XRPL EVM Sidechain testnet access (chain ID `1449000`)
 - A public HTTPS endpoint for webhooks
 
 ## 1. Install The Package
 
 ```bash
-npm install @flowstate/gateway
+npm install @shivanshshrivas/flowstate
 ```
-
-If your npm token cannot access the package, request package access from the FlowState team.
 
 ## 2. Create A Project And API Key
 
@@ -25,8 +26,12 @@ curl -X POST https://api.flowstate.xyz/api/v1/auth/projects/create \
   -d '{
     "name": "My Shop",
     "owner_email": "owner@myshop.com",
-    "platform_fee_wallet": "0xPlatformWallet...",
-    "platform_fee_bps": 250
+    "platform_fee_wallet": "0xYourPlatformWallet",
+    "platform_fee_bps": 250,
+    "contracts": {
+      "escrowStateMachine": "0x33136ca845ace5a4f8CC032793AF22eC024B2ee3",
+      "disputeResolver": "0x9A2C9B4CE17eE3ffD5C3Db97a04009381f457731"
+    }
   }'
 ```
 
@@ -35,7 +40,7 @@ Save the returned `project_id` and `api_key` in secure server-side environment v
 ## 3. Add Provider And Button
 
 ```tsx
-import { FlowStateProvider, PayButton } from "@flowstate/gateway";
+import { FlowStateProvider, PayButton } from "@shivanshshrivas/flowstate";
 
 export default function ProductCheckout({ product }: { product: any }) {
   return (
@@ -43,7 +48,12 @@ export default function ProductCheckout({ product }: { product: any }) {
       config={{
         projectId: process.env.NEXT_PUBLIC_FLOWSTATE_PROJECT_ID!,
         apiKey: process.env.NEXT_PUBLIC_FLOWSTATE_API_KEY!,
-        network: "testnet"
+        network: "testnet",
+        contracts: {
+          escrowStateMachine: "0x33136ca845ace5a4f8CC032793AF22eC024B2ee3",
+          disputeResolver: "0x9A2C9B4CE17eE3ffD5C3Db97a04009381f457731",
+          mockRLUSD: "0x257812213360Df9f3C19cAe9759B58cAcf39323d",
+        },
       }}
     >
       <PayButton product={product} />
@@ -51,6 +61,13 @@ export default function ProductCheckout({ product }: { product: any }) {
   );
 }
 ```
+
+<Callout type="info">
+  The `PayButton` requires a connected wallet. It renders "Connect Wallet to
+  Buy" when no wallet is connected and "Buy with FlowState" when connected.
+  Clicking triggers a multi-step checkout overlay: shipping address, shipping
+  option, price confirmation, then escrow deposit.
+</Callout>
 
 ## 4. Register Your Webhook Endpoint
 
@@ -66,17 +83,31 @@ curl -X POST https://api.flowstate.xyz/api/v1/webhooks/register \
 
 Persist the returned webhook `secret`, then verify `X-FlowState-Signature` in your handler.
 
-## 5. Validate End To End
+## 5. Show Order Progress
 
-1. Trigger checkout from `PayButton`.
-2. Confirm order creation and shipping selection in your app.
-3. Confirm you receive `order.state_changed` webhooks.
-4. Render state updates using `OrderTracker` or your own UI.
+```tsx
+import { OrderTracker } from "@shivanshshrivas/flowstate";
+
+export function OrderStatus({ order }: { order: any }) {
+  return <OrderTracker order={order} />;
+}
+```
+
+The `OrderTracker` displays a visual timeline showing each state in the escrow lifecycle, payout percentages released at each milestone, timestamps, and links to transactions on the XRPL EVM Explorer.
+
+## 6. Validate End To End
+
+1. Connect a wallet on XRPL EVM testnet (chain ID `1449000`).
+2. Get test FLUSD from the faucet contract (`0x257...323d`).
+3. Trigger checkout from `PayButton`.
+4. Confirm order creation and shipping selection in your app.
+5. Confirm you receive `order.state_changed` webhooks as Shippo tracking advances.
+6. Watch partial payouts release to the seller at each milestone.
 
 ## Next
 
-- [Install](/integration/install)
-- [Frontend Integration](/integration/frontend)
-- [Backend Webhooks](/integration/backend-webhooks)
-- [API Endpoints](/reference/api-endpoints)
-
+- [Install](/integration/install) — full package details
+- [Frontend Integration](/integration/frontend) — component API reference
+- [Backend Webhooks](/integration/backend-webhooks) — signature verification
+- [API Endpoints](/reference/api-endpoints) — complete REST surface
+- [Order Lifecycle](/concepts/order-lifecycle) — escrow state machine details

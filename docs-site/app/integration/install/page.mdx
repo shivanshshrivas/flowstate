@@ -1,38 +1,88 @@
+import { Callout } from "nextra/components";
+
 # Install
 
-FlowState is integrated as a package, with backend APIs provided as a hosted service.
+`@shivanshshrivas/flowstate` is an npm package that provides React components, contract ABIs, and TypeScript types for integrating crypto-powered escrow checkout into your e-commerce storefront.
 
-## Package Access
-
-`@flowstate/gateway` is currently distributed as a private/beta package.
+## Install The Package
 
 ```bash
-npm install @flowstate/gateway
+npm install @shivanshshrivas/flowstate
 ```
 
-If installation fails with auth or permissions, request package access from FlowState.
+## Peer Dependencies
+
+The package expects these peer dependencies in your project:
+
+- `react` (v18+ or v19)
+- `wagmi` — for wallet connection and contract interactions
+- `viem` — used internally for chain definitions and ABI encoding
 
 ## Primary Imports
 
 ```ts
-import { FlowStateProvider, PayButton, OrderTracker } from "@flowstate/gateway";
+// React components
+import {
+  FlowStateProvider,
+  PayButton,
+  OrderTracker,
+} from "@shivanshshrivas/flowstate";
+
+// React hook
+import { useFlowState } from "@shivanshshrivas/flowstate";
+
+// Contract ABIs (for direct contract calls)
+import {
+  EscrowStateMachineAbi,
+  MockRLUSDAbi,
+} from "@shivanshshrivas/flowstate";
+
+// Types and enums
+import {
+  OrderState,
+  DisputeStatus,
+  ORDER_STATE_LABELS,
+  ORDER_STATE_SEQUENCE,
+} from "@shivanshshrivas/flowstate";
 ```
+
+## Full Export List
+
+| Export                  | Kind      | Description                                                                                             |
+| ----------------------- | --------- | ------------------------------------------------------------------------------------------------------- |
+| `FlowStateProvider`     | Component | Context provider for project config and contract addresses                                              |
+| `PayButton`             | Component | One-click checkout button with wallet detection                                                         |
+| `OrderTracker`          | Component | Visual order state timeline with payout milestones                                                      |
+| `useFlowState`          | Hook      | Access `config` and `contracts` from the provider                                                       |
+| `EscrowStateMachineAbi` | Const     | ABI for `transferAndEscrow`, `advanceState`, `initiateDispute`, `finalize`, `getEscrow`                 |
+| `MockRLUSDAbi`          | Const     | Standard ERC-20 ABI for FLUSD token                                                                     |
+| `OrderState`            | Enum      | `INITIATED`, `ESCROWED`, `LABEL_CREATED`, `SHIPPED`, `IN_TRANSIT`, `DELIVERED`, `FINALIZED`, `DISPUTED` |
+| `DisputeStatus`         | Enum      | `OPEN`, `SELLER_RESPONDED`, `RESOLVED`, `AUTO_RESOLVED`                                                 |
+| `ORDER_STATE_LABELS`    | Const     | Human-readable labels for each state                                                                    |
+| `ORDER_STATE_SEQUENCE`  | Const     | Linear state progression array (excludes `DISPUTED`)                                                    |
+
+Additionally, the package exports these TypeScript interfaces:
+
+`Product`, `ShippingOption`, `ShippingAddress`, `EscrowDetails`, `OrderItem`, `Order`, `StateTransition`, `Seller`, `PayoutConfig`, `PayoutSchedule`, `SellerMetrics`, `PayoutRecord`, `DisputeEvidence`, `Resolution`, `Dispute`, `PlatformAnalytics`, `WebhookEvent`, `FlowStateConfig`, `FlowStateTheme`, `UserRole`, `User`.
 
 ## Backend Base URL
 
-Use hosted backend APIs at:
+The hosted API gateway is at:
 
-`https://api.flowstate.xyz/api/v1`
+```
+https://api.flowstate.xyz/api/v1
+```
 
-## Initial Setup Checklist
+## Setup Checklist
 
-1. Install package.
-2. Create project and API key (`POST /auth/projects/create`).
-3. Configure provider with `projectId` and `apiKey`.
-4. Register webhook destination (`POST /webhooks/register`).
-5. Verify checkout flow and webhook processing.
+1. Install the package.
+2. Create a project and API key (`POST /api/v1/auth/projects/create`).
+3. Configure `FlowStateProvider` with `projectId`, `apiKey`, `network`, and `contracts`.
+4. Register a webhook destination (`POST /api/v1/webhooks/register`).
+5. Verify the checkout flow: wallet connect, PayButton, escrow, shipping, webhook events.
 
-## Roadmap Note
-
-`.claude/architecture.md` references additional SDK capabilities (for example broader component surfaces and server helpers). Treat those as planned unless exported in the package version you installed.
-
+<Callout type="info">
+  The package components use wagmi for wallet interactions. Make sure your app
+  is wrapped in a wagmi `WagmiProvider` and a wallet connector (e.g.,
+  RainbowKit) configured for XRPL EVM testnet (chain ID `1449000`).
+</Callout>
