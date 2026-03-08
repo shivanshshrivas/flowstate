@@ -1,0 +1,27 @@
+{
+  "name": "list-orders",
+  "description": "List all orders for the authenticated seller, optionally filtered by status",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "seller_id": {
+        "type": "string",
+        "description": "The seller's wallet address or ID (from SYSTEM_CONTEXT user_id)"
+      },
+      "status": {
+        "type": "string",
+        "description": "Filter by order state",
+        "enum": ["INITIATED", "ESCROWED", "LABEL_CREATED", "SHIPPED", "IN_TRANSIT", "DELIVERED", "FINALIZED", "DISPUTED"]
+      },
+      "page": {
+        "type": "number",
+        "description": "Page number (default 1)"
+      },
+      "limit": {
+        "type": "number",
+        "description": "Results per page (default 20, max 100)"
+      }
+    },
+    "required": ["seller_id"]
+  }
+}

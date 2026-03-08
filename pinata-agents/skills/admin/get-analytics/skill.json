@@ -1,0 +1,19 @@
+{
+  "name": "get-analytics",
+  "description": "Get platform-wide analytics including order volume, GMV, dispute rate, and seller stats",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "project_id": {
+        "type": "string",
+        "description": "The platform project ID (from SYSTEM_CONTEXT user_id)"
+      },
+      "period": {
+        "type": "string",
+        "description": "Time period for analytics",
+        "enum": ["7d", "30d", "90d"]
+      }
+    },
+    "required": ["project_id"]
+  }
+}

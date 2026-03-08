@@ -7,10 +7,14 @@
     "test:skills": "npx tsx test/skill-isolation.test.ts",
     "test:service": "npx tsx test/agent-service.test.ts",
     "test:prompts": "npx tsx test/prompt-injection.test.ts",
-    "test": "npx tsx test/skill-isolation.test.ts && npx tsx test/agent-service.test.ts && npx tsx test/prompt-injection.test.ts"
+    "test:live": "npx tsx test/live-agents.test.ts",
+    "test": "npx tsx test/skill-isolation.test.ts && npx tsx test/agent-service.test.ts && npx tsx test/prompt-injection.test.ts",
+    "test:all": "npx tsx test/skill-isolation.test.ts && npx tsx test/agent-service.test.ts && npx tsx test/prompt-injection.test.ts && npx tsx test/live-agents.test.ts"
   },
   "devDependencies": {
+    "@types/ws": "^8.18.1",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "ws": "^8.19.0"
   }
 }
