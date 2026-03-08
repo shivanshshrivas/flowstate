@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FlowState Demo Store",
+  title: "Demo Store",
   description:
     "Blockchain-powered escrow checkout on XRPL EVM Sidechain. Every payment is protected by smart contracts.",
 };

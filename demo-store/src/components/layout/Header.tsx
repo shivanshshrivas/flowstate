@@ -29,11 +29,12 @@ export function Header() {
   const supabaseConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
 
   const navLinks = [
-    { href: "/", label: "Store", roles: ["buyer", "seller", "admin", null] },
-    { href: "/orders", label: "My Orders", roles: ["buyer", "seller", "admin"] },
+    { href: "/", label: "Store", roles: ["buyer", "admin", null] },
+    { href: "/onboard", label: "Developers", roles: ["admin"] },
+    { href: "/orders", label: "My Orders", roles: ["buyer", "admin"] },
     { href: "/seller", label: "Seller", roles: ["seller", "admin"] },
     { href: "/admin", label: "Admin", roles: ["admin"] },
-    { href: "/faucet", label: "Faucet", roles: ["buyer", "seller", "admin", null] },
+    { href: "/faucet", label: "Faucet", roles: ["buyer", "seller", "admin"] },
   ];
 
   const visibleLinks = navLinks.filter((l) =>
@@ -59,7 +60,7 @@ export function Header() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600">
               <Zap className="h-4 w-4 text-white" />
             </div>
-            <span className="hidden sm:block">FlowState</span>
+            <span className="hidden sm:block">Demo Store</span>
           </Link>
 
           {/* Desktop nav */}
@@ -82,18 +83,22 @@ export function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            <Link href="/cart" className="relative">
-              <Button variant="ghost" size="icon">
-                <ShoppingCart className="h-5 w-5" />
-                {cartItemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-violet-600 text-xs text-white flex items-center justify-center font-medium">
-                    {cartItemCount}
-                  </span>
-                )}
-              </Button>
-            </Link>
+            {(!supabaseConfigured || !user || user.role !== "seller") && (
+              <Link href="/cart" className="relative">
+                <Button variant="ghost" size="icon">
+                  <ShoppingCart className="h-5 w-5" />
+                  {cartItemCount > 0 && (
+                    <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-violet-600 text-xs text-white flex items-center justify-center font-medium">
+                      {cartItemCount}
+                    </span>
+                  )}
+                </Button>
+              </Link>
+            )}
 
-            <ConnectButton accountStatus="avatar" showBalance={false} />
+            {(!supabaseConfigured || !!user) && (
+              <ConnectButton accountStatus="avatar" showBalance={false} />
+            )}
 
             {supabaseConfigured && (
               <>

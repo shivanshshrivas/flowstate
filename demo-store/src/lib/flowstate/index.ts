@@ -7,5 +7,10 @@ export { FlowStateProvider, useFlowState } from "./client/FlowStateProvider";
 export { PayButton } from "./client/PayButton";
 export { OrderTracker } from "./client/OrderTracker";
 export { EscrowProgressBar } from "./client/EscrowProgressBar";
+export {
+  OnboardingWizard,
+  type OnboardingResult,
+  type OnboardingWizardProps,
+} from "./client/OnboardingWizard";
 export { MockRLUSDAbi } from "./contracts/MockRLUSD.abi";
 export { EscrowStateMachineAbi } from "./contracts/EscrowStateMachine.abi";

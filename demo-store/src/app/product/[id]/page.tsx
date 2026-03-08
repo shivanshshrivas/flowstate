@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ChevronLeft, Package, Shield, Truck, Clock } from "lucide-react";
 import { MOCK_PRODUCTS } from "@/lib/mock-data";
 import { formatUsd } from "@/lib/utils";
-import { PayButton } from "@/lib/flowstate/client/PayButton";
+import { BuyerPayButton } from "@/components/products/BuyerPayButton";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
@@ -103,7 +103,7 @@ export default async function ProductPage({ params }: PageProps) {
             </div>
           </div>
 
-          <PayButton product={product} className="w-full" />
+          <BuyerPayButton product={product} className="w-full" />
         </div>
       </div>
     </div>
