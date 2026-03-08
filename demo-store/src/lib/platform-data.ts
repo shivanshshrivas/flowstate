@@ -1,11 +1,11 @@
 import {
   type PayoutConfig,
-  type Product,
   type Seller,
   type ShippingAddress,
   type ShippingOption,
   type WebhookEvent,
-} from "@/lib/flowstate/types";
+} from "@shivanshshrivas/flowstate/types";
+import type { Product } from "@/types/product";
 import { MOCK_SELLERS, MOCK_WEBHOOK_EVENTS } from "@/lib/mock-data";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 

@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useContext, useMemo, type ReactNode } from "react";
-import { type FlowStateConfig } from "./types/index";
-import { FlowStateApiClient } from "./apiClient";
-import { FlowStateWsClient } from "./wsClient";
+import { type FlowStateConfig } from "../types/index";
+import { FlowStateApiClient } from "../client/apiClient";
+import { FlowStateWsClient } from "../client/wsClient";
 
 const DEFAULT_CONTRACT_ADDRESSES = {
   escrowStateMachine: "0x0000000000000000000000000000000000000000" as `0x${string}`,

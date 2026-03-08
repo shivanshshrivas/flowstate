@@ -6,7 +6,7 @@ import { parseEther } from "viem";
 import { Droplets, ExternalLink, Loader2, CheckCircle } from "lucide-react";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { CONTRACT_ADDRESSES, XRPL_EXPLORER_URL, XRPL_FAUCET_URL } from "@/lib/constants";
-import { FLUSDAbi } from "@/lib/flowstate/contracts/FLUSD.abi";
+import { FLUSDAbi } from "@shivanshshrivas/flowstate";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatToken, shortenAddress } from "@/lib/utils";

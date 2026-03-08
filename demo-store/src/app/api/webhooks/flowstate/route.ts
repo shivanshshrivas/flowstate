@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { FlowStateServer } from "@flowstate/gateway/server";
+import { FlowStateServer } from "@shivanshshrivas/flowstate/server";
 import { createSupabaseAdminClient } from "@/lib/supabase-server";
 import { supabasePlatformEnabled } from "@/lib/platform-data";
 

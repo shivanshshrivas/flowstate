@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SellerDashboard } from "@flowstate/gateway";
+import { SellerDashboard } from "@shivanshshrivas/flowstate";
 import { RequireRole } from "@/components/guards/RequireRole";
 import { useUserStore } from "@/stores/user-store";
-import type { Seller } from "@/lib/flowstate/types";
+import type { Seller } from "@shivanshshrivas/flowstate";
 
 const DEFAULT_SELLER_ID = "seller-001";
 

@@ -6,7 +6,7 @@ import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAccount } from "wagmi";
 import { wagmiConfig } from "@/lib/wagmi";
-import { FlowStateProvider } from "@flowstate/gateway";
+import { FlowStateProvider } from "@shivanshshrivas/flowstate";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { useUserStore } from "@/stores/user-store";
 import "@rainbow-me/rainbowkit/styles.css";

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { UserRole } from "@/lib/flowstate/types";
+import type { UserRole } from "@shivanshshrivas/flowstate/types";
 
 export interface AppUser {
   id: string;

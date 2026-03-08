@@ -12,7 +12,6 @@ import {
   Loader2,
   ShoppingCart,
 } from "lucide-react";
-import { FlowStateCheckoutButton } from "@flowstate/gateway";
 import { RequireRole } from "@/components/guards/RequireRole";
 import { CheckoutSteps, type CheckoutStep } from "@/components/checkout/CheckoutSteps";
 import { ShippingSelector } from "@/components/checkout/ShippingSelector";
@@ -27,7 +26,7 @@ import {
   type Order,
   type ShippingAddress,
   type ShippingOption,
-} from "@/lib/flowstate/types";
+} from "@shivanshshrivas/flowstate/types";
 
 interface SellerGroup {
   sellerId: string;
@@ -436,13 +435,14 @@ function CheckoutContent() {
                   <Button variant="outline" disabled>
                     Pay with PayPal
                   </Button>
-                  <FlowStateCheckoutButton
+                  <Button
                     onClick={handleConfirmAndPay}
                     disabled={!shippingOption || !isConnected || sellerGroups.length === 0}
-                    isConnected={isConnected}
-                    amountLabel={formatUsd(total)}
                     title={!isConnected ? "Connect your wallet to checkout" : undefined}
-                  />
+                    className="bg-violet-600 hover:bg-violet-700 text-white"
+                  >
+                    {isConnected ? `Pay ${formatUsd(total)} with FLUSD` : "Connect Wallet to Pay"}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

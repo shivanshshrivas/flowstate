@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ShoppingCart } from "lucide-react";
-import { type Product } from "@/lib/flowstate/types";
+import { type Product } from "@/types/product";
 import { formatUsd } from "@/lib/utils";
 import { useCartStore } from "@/stores/cart-store";
 import { useUserStore } from "@/stores/user-store";

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { type OrderState } from "@/lib/flowstate/types";
+import { type OrderState } from "@shivanshshrivas/flowstate/types";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import {
   advanceOrderStateForCurrentUser,

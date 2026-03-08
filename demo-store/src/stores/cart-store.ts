@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { type Product, type ShippingOption, type ShippingAddress } from "@/lib/flowstate/types";
+import { type ShippingOption, type ShippingAddress } from "@shivanshshrivas/flowstate/types";
+import type { Product } from "@/types/product";
 
 export interface CartItem {
   product: Product;

@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useOrderStore } from "@/stores/order-store";
 import { useUserStore } from "@/stores/user-store";
-import { EscrowProgressBar, OrderState, OrderTracker, BuyerChat } from "@flowstate/gateway";
+import { EscrowProgressBar, OrderState, OrderTracker, BuyerChat } from "@shivanshshrivas/flowstate";
 import { OrderStatusBadge } from "@/components/orders/OrderStatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

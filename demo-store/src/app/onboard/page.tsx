@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { OnboardingWizard, type OnboardingResult } from "@/lib/flowstate";
+import { OnboardingWizard, type OnboardingResult } from "@/components/onboarding/OnboardingWizard";
 import { RequireRole } from "@/components/guards/RequireRole";
 
 const FALLBACK_API_BASE_URL = "http://localhost:3001/api/v1";

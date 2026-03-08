@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUserStore } from "@/stores/user-store";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { UserRole } from "@/lib/flowstate/types";
+import type { UserRole } from "@shivanshshrivas/flowstate";
 
 interface Props {
   roles: UserRole[];

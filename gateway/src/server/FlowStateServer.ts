@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import type { WebhookEnvelope } from "./types/webhooks";
+import type { WebhookEnvelope } from "../types/webhooks";
 
 export interface FlowStateServerConfig {
   apiKey?: string;

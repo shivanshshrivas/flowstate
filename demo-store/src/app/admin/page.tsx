@@ -1,6 +1,6 @@
 "use client";
 
-import { AdminDashboard } from "@flowstate/gateway";
+import { AdminDashboard } from "@shivanshshrivas/flowstate";
 import { RequireRole } from "@/components/guards/RequireRole";
 
 const PROJECT_ID = process.env.NEXT_PUBLIC_FLOWSTATE_PROJECT_ID ?? "demo";

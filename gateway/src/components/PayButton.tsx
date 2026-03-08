@@ -7,7 +7,7 @@ import {
   type OrderItem,
   type ShippingOption,
   type ShippingAddress,
-} from "./types/index";
+} from "../types/index";
 import { clsx } from "clsx";
 
 function cn(...args: Parameters<typeof clsx>) {

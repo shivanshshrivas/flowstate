@@ -114,6 +114,11 @@ export class AgentService {
     message: string,
   ): Promise<{ response: string; role: AgentRole; suggestedActions?: string[] }> {
     const baseUrl = env.MCP_AGENTS_URL;
+    if (!baseUrl) {
+      throw new Error(
+        "MCP_AGENTS_URL is not configured. Set it to the ngrok URL of the running mcp-agents server.",
+      );
+    }
     const toolName = TOOL_MAP[role];
 
     const toolArgs: Record<string, string> = { message };

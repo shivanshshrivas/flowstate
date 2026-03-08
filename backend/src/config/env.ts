@@ -15,7 +15,14 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
   PINATA_JWT: z.string().optional(),
   PINATA_GATEWAY: z.string().optional(),
-  MCP_AGENTS_URL: z.string().default("http://localhost:3001"),
+  MCP_AGENTS_URL: z.string().optional(),
+  PINATA_BUYER_AGENT_URL: z.string().optional(),
+  PINATA_BUYER_AGENT_TOKEN: z.string().optional(),
+  PINATA_SELLER_AGENT_URL: z.string().optional(),
+  PINATA_SELLER_AGENT_TOKEN: z.string().optional(),
+  PINATA_ADMIN_AGENT_URL: z.string().optional(),
+  PINATA_ADMIN_AGENT_TOKEN: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

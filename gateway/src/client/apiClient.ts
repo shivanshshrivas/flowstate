@@ -9,7 +9,7 @@ import type {
   PlatformAnalytics,
   WebhookEvent,
   AgentResponse,
-} from "./types/index";
+} from "../types/index";
 
 export interface FlowStateApiClientConfig {
   baseUrl: string;

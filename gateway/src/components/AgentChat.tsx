@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Send, Bot, User, Loader2 } from "lucide-react";
 import { useFlowState } from "./FlowStateProvider";
-import { type ChatMessage, type SuggestedAction } from "./types/index";
+import { type ChatMessage, type SuggestedAction } from "../types/index";
 import { clsx } from "clsx";
 
 function cn(...args: Parameters<typeof clsx>) {

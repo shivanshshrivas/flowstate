@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { type ShippingOption } from "@/lib/flowstate/types";
+import { type ShippingOption } from "@shivanshshrivas/flowstate";
 import { formatUsd } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { CheckCircle, Truck } from "lucide-react";

@@ -1,4 +1,4 @@
-import { OrderState, type Order, type OrderItem, type PayoutSchedule, type StateTransition } from "@/lib/flowstate/types";
+import { OrderState, type Order, type OrderItem, type PayoutSchedule, type StateTransition } from "@shivanshshrivas/flowstate/types";
 import type { User } from "@supabase/supabase-js";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 

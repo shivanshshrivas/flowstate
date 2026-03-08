@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { EscrowProgressBar, OrderState, type Order } from "@/lib/flowstate";
+import { EscrowProgressBar, OrderState, type Order } from "@shivanshshrivas/flowstate";
 import { formatUsd, formatDate } from "@/lib/utils";
 import { OrderStatusBadge } from "./OrderStatusBadge";
 import { Card, CardContent } from "@/components/ui/card";

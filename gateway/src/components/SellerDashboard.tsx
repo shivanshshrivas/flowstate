@@ -21,7 +21,7 @@ import {
   type SellerMetrics,
   OrderState,
   ORDER_STATE_LABELS,
-} from "./types/index";
+} from "../types/index";
 import { clsx } from "clsx";
 
 function cn(...args: Parameters<typeof clsx>) {

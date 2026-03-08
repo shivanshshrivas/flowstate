@@ -12,10 +12,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 import {
-  type Product,
   type ShippingOption,
   type ShippingAddress,
-} from "@/lib/flowstate/types";
+} from "@shivanshshrivas/flowstate/types";
+import { type Product } from "@/types/product";
 import {
   Dialog,
   DialogContent,

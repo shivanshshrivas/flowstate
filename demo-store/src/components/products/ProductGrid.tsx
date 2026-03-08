@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
-import { type Product } from "@/lib/flowstate/types";
+import { type Product } from "@/types/product";
 import { ProductCard } from "./ProductCard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";

@@ -1,13 +1,12 @@
 "use client";
 
 import { AlertTriangle, CheckCircle, Circle } from "lucide-react";
-import {
-  type PayoutSchedule,
-  OrderState,
-  ORDER_STATE_LABELS,
-  ORDER_STATE_SEQUENCE,
-} from "../types";
-import { cn } from "@/lib/utils";
+import { type PayoutSchedule, OrderState, ORDER_STATE_LABELS, ORDER_STATE_SEQUENCE } from "../types/index";
+import { clsx } from "clsx";
+
+function cn(...args: Parameters<typeof clsx>) {
+  return clsx(...args);
+}
 
 export interface EscrowProgressBarProps {
   state: OrderState;
@@ -72,7 +71,11 @@ export function EscrowProgressBar({
                   key={step}
                   className={cn(
                     "flex items-start",
-                    compact ? (isLast ? "shrink-0" : "min-w-0 flex-1") : "flex-none min-w-[7rem] md:min-w-[7.5rem]"
+                    compact
+                      ? isLast
+                        ? "shrink-0"
+                        : "min-w-0 flex-1"
+                      : "flex-none min-w-[7rem] md:min-w-[7.5rem]"
                   )}
                 >
                   <div className={cn("flex shrink-0 flex-col items-center", !compact && "w-full")}>

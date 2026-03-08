@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type Order, OrderState } from "@/lib/flowstate/types";
+import { type Order, OrderState } from "@shivanshshrivas/flowstate/types";
 
 interface OrderStore {
   orders: Order[];

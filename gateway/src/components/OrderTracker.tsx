@@ -1,28 +1,77 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { CheckCircle, Circle, AlertTriangle, ExternalLink } from "lucide-react";
 import {
   type Order,
   OrderState,
   ORDER_STATE_LABELS,
   ORDER_STATE_SEQUENCE,
-} from "../types";
-import { formatDateTime, formatToken } from "@/lib/utils";
-import { XRPL_EXPLORER_URL } from "@/lib/constants";
-import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+} from "../types/index";
+import { useFlowState } from "./FlowStateProvider";
+import { clsx } from "clsx";
 
-interface OrderTrackerProps {
-  order: Order;
+function cn(...args: Parameters<typeof clsx>) {
+  return clsx(...args);
 }
 
-export function OrderTracker({ order }: OrderTrackerProps) {
-  const isDisputed = order.state === OrderState.DISPUTED;
-  const currentIdx = ORDER_STATE_SEQUENCE.indexOf(order.state);
+function formatDateTime(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatToken(raw: string): string {
+  const n = parseFloat(raw);
+  if (isNaN(n)) return raw;
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 }) + " FLUSD";
+}
+
+export interface OrderTrackerProps {
+  order: Order;
+  explorerUrl?: string;
+}
+
+export function OrderTracker({ order, explorerUrl = "https://explorer.testnet.xrplevm.org" }: OrderTrackerProps) {
+  const { wsClient } = useFlowState();
+  const [liveOrder, setLiveOrder] = useState<Order>(order);
+
+  // Subscribe to real-time order state updates via wsClient
+  useEffect(() => {
+    if (!wsClient) return;
+
+    wsClient.connect();
+
+    const unsub = wsClient.on<{ order_id: string; new_state: string }>(
+      "order_state_changed",
+      (data) => {
+        if (data.order_id === liveOrder.id) {
+          setLiveOrder((prev) => ({
+            ...prev,
+            state: data.new_state as OrderState,
+          }));
+        }
+      }
+    );
+
+    return () => {
+      unsub();
+    };
+  }, [wsClient, liveOrder.id]);
+
+  // Keep in sync when prop changes
+  useEffect(() => {
+    setLiveOrder(order);
+  }, [order]);
+
+  const isDisputed = liveOrder.state === OrderState.DISPUTED;
+  const currentIdx = ORDER_STATE_SEQUENCE.indexOf(liveOrder.state);
 
   return (
     <div className="space-y-6">
-      {/* Disputed banner */}
       {isDisputed && (
         <div className="flex items-center gap-3 rounded-xl border border-red-800 bg-red-950/40 p-4">
           <AlertTriangle className="h-5 w-5 text-red-400 shrink-0" />
@@ -35,18 +84,15 @@ export function OrderTracker({ order }: OrderTrackerProps) {
         </div>
       )}
 
-      {/* Progress timeline */}
       <div className="relative">
         {ORDER_STATE_SEQUENCE.map((state, idx) => {
-          const transition = order.state_history.find((h) => h.to === state);
-          const payout = order.payout_schedule.find((p) => p.state === state);
+          const transition = liveOrder.state_history.find((h) => h.to === state);
+          const payout = liveOrder.payout_schedule.find((p) => p.state === state);
           const isPast = currentIdx > idx && !isDisputed;
           const isCurrent = currentIdx === idx && !isDisputed;
-          const isFuture = currentIdx < idx || isDisputed;
 
           return (
             <div key={state} className="flex gap-4">
-              {/* Left: icon + connector */}
               <div className="flex flex-col items-center">
                 <div
                   className={cn(
@@ -79,7 +125,6 @@ export function OrderTracker({ order }: OrderTrackerProps) {
                 )}
               </div>
 
-              {/* Right: content */}
               <div className="pb-6 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span
@@ -95,7 +140,9 @@ export function OrderTracker({ order }: OrderTrackerProps) {
                     {ORDER_STATE_LABELS[state]}
                   </span>
                   {isCurrent && !isDisputed && (
-                    <Badge variant="default" className="text-xs">Current</Badge>
+                    <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-200">
+                      Current
+                    </span>
                   )}
                   {payout && (
                     <span className="text-xs text-neutral-500">
@@ -119,7 +166,7 @@ export function OrderTracker({ order }: OrderTrackerProps) {
                     </span>
                     {payout.txHash && (
                       <a
-                        href={`${XRPL_EXPLORER_URL}/tx/${payout.txHash}`}
+                        href={`${explorerUrl}/tx/${payout.txHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-xs text-neutral-500 hover:text-neutral-300 flex items-center gap-0.5"
